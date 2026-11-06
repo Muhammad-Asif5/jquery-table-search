@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jquery-table-search demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="src/jquery.tableSearch.css" rel="stylesheet">
+</head>
+<body class="p-4">
+
+    <h4 class="mb-3">Click a header to sort, or the bars icon to filter</h4>
+
+    <table class="table table-bordered table-hover" id="myTable">
+        <thead class="table-light">
+            <tr>
+                <th data-type="string">Name</th>
+                <th data-type="string">Position</th>
+                <th data-type="string">Office</th>
+                <th data-type="numeric">Extn.</th>
+                <th data-type="date">Start date</th>
+                <th data-currency>Salary</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Airi Satou</td><td>Accountant</td><td>Tokyo</td><td>5407</td><td>2008/11/28</td><td>$162,700</td></tr>
+            <tr><td>Angelica Ramos</td><td>Chief Executive Officer (CEO)</td><td>London</td><td>5797</td><td>2009/10/09</td><td>$1,200,000</td></tr>
+            <tr><td>Ashton Cox</td><td>Junior Technical Author</td><td>San Francisco</td><td>1562</td><td>2009/01/12</td><td>$86,000</td></tr>
+            <tr><td>Bradley Greer</td><td>Software Engineer</td><td>London</td><td>2558</td><td>2012/10/13</td><td>$132,000</td></tr>
+            <tr><td>Cedric Kelly</td><td>Senior Javascript Developer</td><td>Edinburgh</td><td>6224</td><td>2012/03/29</td><td>$433,060</td></tr>
+            <tr><td>Zorita Serrano</td><td>Software Engineer</td><td>San Francisco</td><td>1223</td><td>2008/06/01</td><td>$150,000</td></tr>
+        </tbody>
+    </table>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="src/jquery.tableSearch.js"></script>
+    <script>
+        // data-filterable="true"  data-sortable="true"
+        $('#myTable').tableSearch({
+            showSortIcon: true,
+            showFilterIcon: true,
+            debounceTime: 300,
+            dateFormat: 'YYYY/MM/DD',
+            numericRegex: /[^0-9.-]+/g,
+            currencySymbol: 'Rs',        // '$', 'Rs', 'PKR', '€' ...
+            currencyPosition: 'prefix',  // or 'suffix'
+            currencyFormatCells: true
+        });
+    </script>
+</body>
+</html>

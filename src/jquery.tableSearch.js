@@ -1,0 +1,774 @@
+/*!
+ * jQuery tableSearch 2.0
+ * Per-column filtering (AND across columns) and single-column sorting for HTML tables.
+ *
+ * Usage:
+ *   $('#myTable').tableSearch({ dateOrder: 'dmy', debounce: 150 });
+ *   $('#myTable').tableSearch('refresh');        // after rows are added/removed/edited
+ *   $('#myTable').tableSearch('clearFilters');
+ *   $('#myTable').tableSearch('clearSort');
+ *   $('#myTable').tableSearch('getState');
+ *   $('#myTable').tableSearch('destroy');
+ *
+ * Column types via <th data-type="string|numeric|date"> (default: string).
+ * Per-column override of the icon options: <th data-sortable="false"> / <th data-filterable="false">
+ * (also works as "true" to enable on a column when the global option is off).
+ * Currency columns: <th data-currency> (uses the global currencySymbol) or <th data-currency="Rs"> (own symbol).
+ * The column becomes numeric, its cells are shown as symbol + grouped number, and the filter field shows the symbol.
+ * Optional per-cell override for sorting/filtering: <td data-sort-value="...">.
+ *
+ * Events on the table: "tablesearch:filter" ({visible,total}), "tablesearch:sort" ({column,direction}).
+ */
+(function (factory) {
+    if (typeof define === 'function' && define.amd) {
+        define(['jquery'], factory);
+    } else if (typeof module === 'object' && module.exports) {
+        module.exports = factory(require('jquery'));
+    } else {
+        factory(window.jQuery);
+    }
+})(function ($) {
+    'use strict';
+
+    var DATA_KEY = 'tableSearch';
+    var uid = 0;
+
+    var ICONS = {
+        sortHeader: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"></path><path d="m11 16-4 4-4-4"></path><path d="M7 4v16"></path><path d="M15 8h6"></path><path d="M15 16h6"></path><path d="M13 12h8"></path></svg>',
+        bars: '<svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line></svg>',
+        equal: '<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line></svg>',
+        search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+        close: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+        sortAsc: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path><path d="M11 12h4"></path><path d="M11 16h7"></path><path d="M11 20h10"></path></svg>',
+        sortDesc: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"></path><path d="M7 20V4"></path><path d="M11 4h10"></path><path d="M11 8h7"></path><path d="M11 12h4"></path></svg>',
+        clearSort: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-8-8"></path><path d="M3 4h12"></path><path d="M3 8h9"></path><path d="M3 12h6"></path><path d="m13 21 8-8"></path></svg>'
+    };
+
+    var CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
+
+    var OPERATORS = {
+        string: ['contains', 'not_contains', 'eq', 'neq', 'starts', 'ends', 'empty', 'not_empty'],
+        numeric: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'empty', 'not_empty'],
+        date: ['eq', 'neq', 'gt', 'lt', 'empty', 'not_empty']
+    };
+
+    var DEFAULTS = {
+        showSortIcon: true,            // show the sort icon in headers (and sort items in the popup)
+        showFilterIcon: true,          // show the filter (bars) icon in headers and enable the filter popup
+        sortOnHeaderClick: true,       // clicking anywhere on a sortable header (not just the icon) cycles asc -> desc -> off
+        debounceTime: 150,             // ms delay while typing in a filter input (legacy alias: debounce)
+        dateFormat: 'auto',            // how date cells are parsed: tokens YYYY, YY, MM, M, DD, D, e.g. 'YYYY-MM-DD', 'DD/MM/YYYY'; 'auto' = guess
+        dateOrder: 'dmy',              // only for dateFormat 'auto' with non-ISO dates like 28/11/2008: 'dmy' or 'mdy'
+        numericRegex: /[^0-9.-]+/g,    // characters removed from numeric cells/inputs before parsing (currency, commas, spaces...)
+        decimalSeparator: '.',         // '.' or ',' for numeric columns (applied before numericRegex)
+        currencySymbol: '$',           // symbol for columns marked with data-currency, e.g. '$', 'Rs', 'PKR', '€'
+        currencyPosition: 'prefix',    // 'prefix' ($1,200) or 'suffix' (1,200 PKR)
+        currencyFormatCells: true,     // rewrite currency cells as symbol + grouped number (original text restored on destroy)
+        currencyLocale: null,          // number formatting locale; null = en-US ('.' decimal) or de-DE (',' decimal)
+        emptyLast: true,               // empty cells always sort to the bottom
+        locale: undefined,             // passed to Intl.Collator
+        collator: { numeric: true, sensitivity: 'base' },
+        onFilter: null,                // function (info) {}
+        onSort: null,                  // function (info) {}
+        labels: {
+            sort: 'Sort',
+            filter: 'Filter',
+            clear: 'Clear',
+            sortAsc: 'Sort Ascending',
+            sortDesc: 'Sort Descending',
+            clearSort: 'Clear sort',
+            operators: {
+                contains: 'Contains', not_contains: 'Does not contain',
+                eq: 'Equals', neq: 'Does not equal',
+                starts: 'Starts', ends: 'Ends',
+                gt: 'Greater than', gte: 'Greater or equal',
+                lt: 'Less than', lte: 'Less or equal',
+                empty: 'Empty', not_empty: 'Not Empty'
+            },
+            dateOperators: { gt: 'After', lt: 'Before' }
+        }
+    };
+
+    // ---------------------------------------------------------------- parsing
+
+    function toGlobalRegex(rx) {
+        // toString check instead of instanceof, so regexes from other frames/realms work too
+        if (Object.prototype.toString.call(rx) === '[object RegExp]') return rx.global ? rx : new RegExp(rx.source, rx.flags + 'g');
+        return new RegExp(String(rx), 'g');
+    }
+
+    function parseNumber(text, decimal, regex) {
+        var s = String(text == null ? '' : text).trim();
+        if (!s) return NaN;
+        var paren = /^\(.*\)$/.test(s);
+        if (decimal === ',') s = s.replace(/\./g, '').replace(',', '.');
+        else s = s.replace(/,/g, '');
+        s = s.replace(regex || DEFAULTS.numericRegex, '');
+        var n = parseFloat(s);
+        if (isNaN(n)) return NaN;
+        return paren ? -Math.abs(n) : n;
+    }
+
+    // Compiles a format such as 'DD/MM/YYYY' into function(text) -> UTC-midnight timestamp or NaN.
+    function compileDateFormat(format) {
+        var parts = [];
+        // Tokens become capture groups; any of / - . in the format matches any of / - . in the cell;
+        // every other character is matched literally.
+        var src = String(format).replace(/YYYY|YY|MM|M|DD|D|[\/\-.]|[\s\S]/g, function (tok) {
+            if (tok === 'YYYY') { parts.push('Y'); return '(\\d{4})'; }
+            if (tok === 'YY') { parts.push('Y'); return '(\\d{2})'; }
+            if (tok === 'MM' || tok === 'M') { parts.push('M'); return '(\\d{1,2})'; }
+            if (tok === 'DD' || tok === 'D') { parts.push('D'); return '(\\d{1,2})'; }
+            if (/[\/\-.]/.test(tok)) return '[\\/\\-.]';
+            return tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        });
+        var tokens = String(format).match(/YYYY|YY|MM|M|DD|D/g) || [];
+        var hasY = /Y/.test(parts.join('')), hasM = parts.indexOf('M') > -1, hasD = parts.indexOf('D') > -1;
+        if (!hasY || !hasM || !hasD) throw new Error('tableSearch: dateFormat "' + format + '" must contain year (YYYY/YY), month (MM/M) and day (DD/D)');
+        var re = new RegExp('^' + src + '$');
+        return function (text) {
+            var m = re.exec(String(text == null ? '' : text).trim());
+            if (!m) return NaN;
+            var y, mo, d;
+            for (var i = 0; i < tokens.length; i++) {
+                var v = parseInt(m[i + 1], 10);
+                if (tokens[i] === 'YYYY') y = v;
+                else if (tokens[i] === 'YY') y = v < 70 ? 2000 + v : 1900 + v;
+                else if (tokens[i].charAt(0) === 'M') mo = v;
+                else d = v;
+            }
+            var t = Date.UTC(y, mo - 1, d), dt = new Date(t);
+            return (dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d) ? t : NaN;
+        };
+    }
+
+    function formatCurrency(n, symbol, position, nf) {
+        var str = nf.format(Math.abs(n));
+        var gap = /[A-Za-z]$/.test(symbol) ? ' ' : ''; // 'Rs 1,200' but '$1,200'
+        var body = position === 'suffix' ? str + gap + symbol : symbol + gap + str;
+        return (n < 0 ? '-' : '') + body;
+    }
+
+    // Formats a UTC-midnight timestamp using the same tokens as dateFormat.
+    function formatDate(ts, fmt) {
+        var d = new Date(ts), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, day = d.getUTCDate();
+        function pad(n, len) { n = String(n); while (n.length < len) n = '0' + n; return n; }
+        return String(fmt).replace(/YYYY|YY|MM|M|DD|D/g, function (t) {
+            switch (t) {
+                case 'YYYY': return pad(y, 4);
+                case 'YY': return pad(y % 100, 2);
+                case 'MM': return pad(m, 2);
+                case 'M': return m;
+                case 'DD': return pad(day, 2);
+                default: return day;
+            }
+        });
+    }
+
+    // Returns UTC-midnight timestamp, or NaN.
+    function parseDate(text, order) {
+        var s = String(text == null ? '' : text).trim();
+        if (!s) return NaN;
+        var m = /^(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})$/.exec(s);
+        if (m) {
+            var y, mo, d, a = +m[1], b = +m[2], c = +m[3];
+            if (m[1].length === 4) { y = a; mo = b; d = c; }
+            else if (m[3].length === 4) { y = c; if (order === 'mdy') { mo = a; d = b; } else { d = a; mo = b; } }
+            else return NaN; // ambiguous 2-digit years
+            var t = Date.UTC(y, mo - 1, d), dt = new Date(t);
+            return (dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d) ? t : NaN;
+        }
+        var p = Date.parse(s);
+        if (isNaN(p)) return NaN;
+        var l = new Date(p);
+        return Date.UTC(l.getFullYear(), l.getMonth(), l.getDate());
+    }
+
+    // ---------------------------------------------------------------- class
+
+    function TableSearch(table, options) {
+        this.table = table;
+        this.$table = $(table);
+        this.opts = options;
+        this.ns = '.tableSearch' + (++uid);
+        this.collator = new Intl.Collator(options.locale, options.collator);
+        var self = this, fmt = options.dateFormat;
+        this.parseCellDate = (fmt && String(fmt).toLowerCase() !== 'auto')
+            ? compileDateFormat(fmt)
+            : function (t) { return parseDate(t, self.opts.dateOrder); };
+        var curLocale = options.currencyLocale || (options.decimalSeparator === ',' ? 'de-DE' : 'en-US');
+        this._nfCache = {};
+        this._curLocale = curLocale;
+        this.displayDateFormat = (fmt && String(fmt).toLowerCase() !== 'auto') ? fmt : 'YYYY-MM-DD';
+        this.cols = [];
+        this.rows = [];
+        this.rowMap = new Map();
+        this.nextIdx = 0;
+        this.sort = { col: -1, dir: null };
+        this.openCol = -1;
+        this.timer = null;
+
+        this._build();
+        this._bind();
+        this.refresh();
+    }
+
+    var proto = TableSearch.prototype;
+
+    proto._opLabel = function (type, op) {
+        var L = this.opts.labels;
+        if (type === 'date' && L.dateOperators && L.dateOperators[op]) return L.dateOperators[op];
+        return L.operators[op] || op;
+    };
+
+    proto._build = function () {
+        var self = this, L = this.opts.labels;
+        var $headRow = this.$table.children('thead').find('tr').last();
+
+        $headRow.children('th').each(function (index) {
+            var $th = $(this);
+            var type = String($th.data('type') || 'string').toLowerCase();
+            if (!OPERATORS[type]) type = 'string';
+            var dCur = $th.data('currency'), currency = null;
+            if (dCur !== undefined && dCur !== false && String(dCur).toLowerCase() !== 'false') {
+                var custom = (typeof dCur === 'string' && dCur !== '' && dCur.toLowerCase() !== 'true') ? dCur : '';
+                currency = custom || self.opts.currencySymbol || '$';
+                type = 'numeric'; // a currency column is numeric for filtering and sorting
+            }
+            var headerText = $.trim($th.text());
+            var dSort = $th.data('sortable'), dFilter = $th.data('filterable');
+            var sortable = dSort === undefined ? !!self.opts.showSortIcon : !!dSort;
+            var filterable = dFilter === undefined ? !!self.opts.showFilterIcon : !!dFilter;
+            var col = {
+                index: index, type: type, currency: currency, $th: $th, origHtml: $th.html(), headerText: headerText,
+                sortable: sortable, filterable: filterable,
+                $sortBtn: $(), $filterBtn: $(), $popup: $(), $select: $(), $input: $(), $clear: $(), $valueGroup: $(), $picker: $()
+            };
+
+            var $content = $('<div class="jts-header-content"></div>');
+            if (sortable && self.opts.sortOnHeaderClick) $content.css({ cursor: 'pointer', userSelect: 'none' });
+            $content.append($('<span></span>').text(headerText));
+            var $icons = (sortable || filterable) ? $('<div class="jts-header-icons"></div>').appendTo($content) : $();
+
+            if (sortable) {
+                col.$sortBtn = $('<span class="jts-icon-btn jts-sort-header-btn" role="button" tabindex="0"></span>')
+                    .attr({ title: L.sort, 'aria-label': L.sort + ': ' + headerText }).html(ICONS.sortHeader).appendTo($icons);
+            }
+
+            if (!filterable) {
+                $th.empty().append($content);
+                self.cols.push(col);
+                return;
+            }
+
+            col.$filterBtn = $('<span class="jts-icon-btn jts-bars-btn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"></span>')
+                .attr({ title: L.filter, 'aria-label': L.filter + ': ' + headerText }).html(ICONS.bars).appendTo($icons);
+
+            var $select = $('<select class="form-select jts-select"></select>').attr('aria-label', L.filter + ' operator');
+            $.each(OPERATORS[type], function (_, op) {
+                $select.append($('<option></option>').val(op).text(self._opLabel(type, op)));
+            });
+
+            var $input = $('<input class="form-control jts-input" placeholder="">')
+                .attr({ type: 'text', autocomplete: 'off', 'aria-label': headerText + ' ' + L.filter });
+            if (type === 'numeric') $input.attr('inputmode', 'decimal');
+            if (type === 'date') $input.attr('placeholder', self.displayDateFormat);
+
+            var $clear = $('<span class="jts-clear-btn" role="button" tabindex="0"></span>')
+                .attr({ title: L.clear, 'aria-label': L.clear }).html(ICONS.close);
+
+            var $popup = $(
+                '<div class="jts-popup shadow" role="dialog">' +
+                '<div class="p-3 border-bottom">' +
+                '<div class="input-group input-group-sm mb-2"><span class="input-group-text jts-input-group-text">' + ICONS.equal + '</span></div>' +
+                '<div class="input-group input-group-sm position-relative jts-value-group"><span class="input-group-text jts-input-group-text">' + ICONS.search + '</span></div>' +
+                '</div></div>'
+            ).attr('aria-label', L.filter + ': ' + headerText);
+
+            $popup.find('.input-group').eq(0).append($select);
+            col.$valueGroup = $popup.find('.jts-value-group').append($input, $clear);
+
+            // Text field + native calendar: a visually hidden <input type="date"> sits under the text field
+            // and its picker is opened when the text field gets focus.
+            if (currency) col.$valueGroup.children('.input-group-text').empty().text(currency).attr('title', currency);
+
+            if (type === 'date') {
+                col.$picker = $('<input type="date" class="jts-date-picker" tabindex="-1" aria-hidden="true">')
+                    .css({ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '1px', padding: 0, border: 0, opacity: 0, pointerEvents: 'none' })
+                    .appendTo(col.$valueGroup);
+            }
+
+            if (sortable) {
+                var $items = $('<div class="py-1"></div>').appendTo($popup);
+                $.each([['asc', ICONS.sortAsc, L.sortAsc], ['desc', ICONS.sortDesc, L.sortDesc], ['clear', ICONS.clearSort, L.clearSort]], function (_, a) {
+                    var $item = $('<a href="#" class="jts-sort-item"></a>').attr('data-action', a[0])
+                        .append(a[1]).append(document.createTextNode(' ' + a[2])).appendTo($items);
+                    if (a[0] !== 'clear') {
+                        // tick shown at the right edge of the item that is currently applied
+                        $('<span class="jts-sort-check" aria-hidden="true"></span>').html(CHECK_ICON)
+                            .css({ display: 'none', 'float': 'right', marginLeft: 'auto' }).appendTo($item);
+                    }
+                });
+            } else {
+                $popup.children('.p-3').removeClass('border-bottom');
+            }
+
+            col.$popup = $popup; col.$select = $select; col.$input = $input; col.$clear = $clear;
+            $th.empty().append($content, $popup);
+            self.cols.push(col);
+        });
+    };
+
+    proto._colOf = function (el) {
+        var th = $(el).closest('th')[0];
+        return th ? this.cols[$(th).index()] : null;
+    };
+
+    proto._bind = function () {
+        var self = this, ns = this.ns;
+        var $t = this.$table;
+
+        $t.on('click' + ns, '.jts-bars-btn', function (e) {
+            var col = self._colOf(this); if (col) self._togglePopup(col);
+        });
+
+        // One handler for the whole header cell (label + sort icon). The filter icon is excluded.
+        $t.on('click' + ns, '.jts-header-content', function (e) {
+            var $tgt = $(e.target);
+            if ($tgt.closest('.jts-bars-btn').length) return;
+            if (!self.opts.sortOnHeaderClick && !$tgt.closest('.jts-sort-header-btn').length) return;
+            var col = self._colOf(this); if (!col || !col.sortable) return;
+            if (self.sort.col !== col.index) self._setSort(col.index, 'asc');
+            else if (self.sort.dir === 'asc') self._setSort(col.index, 'desc');
+            else self._setSort(-1, null);
+        });
+
+        $t.on('click' + ns, '.jts-sort-item', function (e) {
+            e.preventDefault();
+            var col = self._colOf(this); if (!col) return;
+            var action = $(this).data('action');
+            if (action === 'clear') self._setSort(-1, null); else self._setSort(col.index, action);
+        });
+
+        $t.on('input' + ns + ' change' + ns, '.jts-input', function () {
+            var col = self._colOf(this); if (!col) return;
+            self._updateClearIcon(col);
+            if (col.type === 'date') self._syncPicker(col);
+            clearTimeout(self.timer);
+            self.timer = setTimeout(function () { self.applyFilters(); }, self.opts.debounceTime);
+        });
+
+        // Date columns: show the calendar when the text field gets focus (or is clicked again)
+        $t.on('focusin' + ns + ' click' + ns, '.jts-input', function () {
+            var col = self._colOf(this);
+            if (col && col.type === 'date') self._openPicker(col);
+        });
+
+        // A day picked in the calendar is written into the text field using dateFormat
+        $t.on('change' + ns, '.jts-date-picker', function () {
+            var col = self._colOf(this); if (!col) return;
+            var ts = parseDate(this.value, 'dmy'); // native value is always YYYY-MM-DD
+            col.$input.val(isNaN(ts) ? '' : formatDate(ts, self.displayDateFormat));
+            self._updateClearIcon(col);
+            clearTimeout(self.timer);
+            self.applyFilters();
+        });
+
+        $t.on('change' + ns, '.jts-select', function () {
+            var col = self._colOf(this); if (!col) return;
+            self._updateValueVisibility(col);
+            clearTimeout(self.timer);
+            self.applyFilters();
+        });
+
+        $t.on('click' + ns, '.jts-clear-btn', function (e) {
+            e.preventDefault();
+            var col = self._colOf(this); if (!col) return;
+            col.$input.val('');
+            col.$picker.val('');
+            self._updateClearIcon(col);
+            clearTimeout(self.timer);
+            self.applyFilters();
+            if (col.type !== 'date') col.$input.trigger('focus');
+        });
+
+        // Keyboard activation for the span "buttons"
+        $t.on('keydown' + ns, '.jts-icon-btn, .jts-clear-btn', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); }
+        });
+
+        // Escape closes the popup and returns focus to its trigger
+        $t.on('keydown' + ns, function (e) {
+            if (e.key === 'Escape' && self.openCol > -1) {
+                var col = self.cols[self.openCol];
+                self._closePopups();
+                if (col) col.$filterBtn.trigger('focus');
+            }
+        });
+
+        // Any click outside the popup (including the header text and sort icon) closes this table's popups;
+        // the filter icon is excluded because its own handler toggles the popup
+        $(document).on('click' + ns, function (e) {
+            if (self.openCol === -1) return;
+            var $tgt = $(e.target);
+            if (!$tgt.closest('.jts-popup, .jts-bars-btn', self.table).length) self._closePopups(); // header label/sort icon/anywhere else closes it
+        });
+
+        $(window).on('resize' + ns, function () {
+            if (self.openCol > -1) self._position(self.cols[self.openCol]);
+        });
+    };
+
+    // ---------------------------------------------------------------- popup UI
+
+    proto._position = function (col) {
+        var $p = col.$popup;
+        $p.css({ left: '0', right: 'auto' });
+        var right = $p[0].getBoundingClientRect().right;
+        if (right > document.documentElement.clientWidth) $p.css({ left: 'auto', right: '0' });
+    };
+
+    proto._togglePopup = function (col) {
+        var wasOpen = this.openCol === col.index;
+        this._closePopups();
+        if (wasOpen) return;
+        col.$popup.addClass('active');
+        col.$filterBtn.attr('aria-expanded', 'true');
+        this.openCol = col.index;
+        this._position(col);
+        col.$input.trigger('focus');
+    };
+
+    proto._closePopups = function () {
+        $.each(this.cols, function (_, c) {
+            c.$popup.removeClass('active');
+            c.$filterBtn.attr('aria-expanded', 'false');
+        });
+        this.openCol = -1;
+    };
+
+    proto._openPicker = function (col) {
+        var p = col.$picker[0], now = Date.now();
+        if (!p || typeof p.showPicker !== 'function') return; // older browsers: user just types the date
+        if (col.pickerAt && now - col.pickerAt < 400) return;  // focus + click fire together on a mouse click
+        col.pickerAt = now;
+        try { p.showPicker(); } catch (e) { /* needs user activation / already open */ }
+    };
+
+    // Keep the calendar's selected day in step with what the user typed.
+    proto._syncPicker = function (col) {
+        var raw = $.trim(col.$input.val()), ts = raw ? this._parseSearchDate(raw) : NaN;
+        col.$picker.val(isNaN(ts) ? '' : new Date(ts).toISOString().slice(0, 10));
+    };
+
+    // Typed search dates follow dateFormat; ISO-style input is accepted as a fallback.
+    proto._parseSearchDate = function (raw) {
+        var t = this.parseCellDate(raw);
+        return isNaN(t) ? parseDate(raw, this.opts.dateOrder) : t;
+    };
+
+    proto._updateClearIcon = function (col) {
+        if (col.$input.val() !== '') col.$clear.css('display', 'flex'); else col.$clear.hide();
+    };
+
+    proto._updateValueVisibility = function (col) {
+        var op = col.$select.val();
+        col.$valueGroup.toggle(!(op === 'empty' || op === 'not_empty'));
+    };
+
+    // ---------------------------------------------------------------- data
+
+    proto.refresh = function () {
+        var tbody = this.table.tBodies[0];
+        var trs = tbody ? tbody.rows : [];
+        var old = this.rowMap, map = new Map(), rows = [];
+
+        for (var i = 0; i < trs.length; i++) {
+            var tr = trs[i], r = old.get(tr);
+            if (!r) r = { el: tr, idx: this.nextIdx++, cache: [], vis: tr.style.display !== 'none' };
+            else r.cache = [];
+            map.set(tr, r);
+            rows.push(r);
+        }
+        this.rowMap = map;
+        this.rows = rows;
+
+        this._formatCurrencyCells();
+        this._checkDateColumns();
+        this.applyFilters();
+        if (this.sort.col > -1) this._applySort();
+        return this;
+    };
+
+    proto._numberFormat = function (decimals) {
+        return this._nfCache[decimals] || (this._nfCache[decimals] =
+            new Intl.NumberFormat(this._curLocale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }));
+    };
+
+    // Shows currency cells as symbol + grouped number. The numeric value is kept in data-sort-value so
+    // sorting/filtering never depend on the display text; destroy() puts the original text back.
+    proto._formatCurrencyCells = function () {
+        if (!this.opts.currencyFormatCells) return;
+        var o = this.opts;
+        for (var ci = 0; ci < this.cols.length; ci++) {
+            var col = this.cols[ci];
+            if (!col.currency) continue;
+            for (var i = 0; i < this.rows.length; i++) {
+                var cell = this.rows[i].el.cells[ci];
+                if (!cell || cell.children.length) continue;               // don't destroy nested markup
+                var cur = $.trim(cell.textContent);
+                if (cur === '' || cell.getAttribute('data-jts-fmt') === cur) continue; // empty, or already ours
+                var ours = cell.hasAttribute('data-jts-fmt');
+                var userSv = cell.hasAttribute('data-sort-value') && !ours;
+                var n = parseNumber(userSv ? cell.getAttribute('data-sort-value') : cur, o.decimalSeparator, o.numericRegex);
+                if (n !== n) continue;                                      // not a number: leave as is
+                var dec = (String(Math.abs(n)).split('.')[1] || '').length;
+                var text = formatCurrency(n, col.currency, o.currencyPosition, this._numberFormat(dec > 0 ? Math.max(2, dec) : 0));
+                cell.setAttribute('data-jts-orig', cur);
+                cell.setAttribute('data-jts-fmt', text);
+                if (!userSv) { cell.setAttribute('data-sort-value', String(n)); cell.setAttribute('data-jts-sv', '1'); }
+                cell.textContent = text;
+            }
+        }
+    };
+
+    // Dev aid: warn when date cells don't match dateFormat (they'd silently be treated as empty).
+    proto._checkDateColumns = function () {
+        if (typeof console === 'undefined' || !console.warn) return;
+        for (var ci = 0; ci < this.cols.length; ci++) {
+            if (this.cols[ci].type !== 'date') continue;
+            var bad = 0, sample = '';
+            for (var i = 0; i < this.rows.length; i++) {
+                var k = this._key(this.rows[i], ci);
+                if (k.text !== '' && k.date !== k.date) { bad++; if (!sample) sample = k.text; }
+            }
+            if (bad) console.warn('tableSearch: ' + bad + ' cell(s) in date column "' + this.cols[ci].headerText +
+                '" do not match dateFormat "' + this.opts.dateFormat + '" (e.g. "' + sample + '") and are treated as empty.');
+        }
+    };
+
+    // Lazily parsed, cached per row/column.
+    proto._key = function (row, ci) {
+        var k = row.cache[ci];
+        if (k) return k;
+        var cell = row.el.cells[ci], type = this.cols[ci].type;
+        var text = cell ? $.trim(cell.textContent) : '';
+        var attr = cell ? cell.getAttribute('data-sort-value') : null;
+        var src = attr !== null ? attr : text;
+        k = row.cache[ci] = {
+            text: text,
+            lower: text.toLowerCase(),
+            src: src,
+            num: type === 'numeric' ? parseNumber(src, this.opts.decimalSeparator, this.opts.numericRegex) : NaN,
+            date: type === 'date' ? this.parseCellDate(src) : NaN
+        };
+        return k;
+    };
+
+    // ---------------------------------------------------------------- filtering
+
+    proto._predicate = function (col) {
+        if (!col.filterable) return null;
+        var op = col.$select.val(), raw = $.trim(col.$input.val());
+        if (op === 'empty') return function (k) { return k.text === ''; };
+        if (op === 'not_empty') return function (k) { return k.text !== ''; };
+        if (!raw) return null;
+
+        var t, get;
+        if (col.type === 'numeric') { t = parseNumber(raw, this.opts.decimalSeparator, this.opts.numericRegex); get = function (k) { return k.num; }; }
+        else if (col.type === 'date') { t = this._parseSearchDate(raw); get = function (k) { return k.date; }; }
+        else { t = raw.toLowerCase(); get = function (k) { return k.lower; }; }
+        if (typeof t === 'number' && isNaN(t)) return null; // unparseable input => filter inactive
+
+        switch (op) {
+            case 'contains': return function (k) { return get(k).indexOf(t) > -1; };
+            case 'not_contains': return function (k) { return get(k).indexOf(t) === -1; };
+            case 'starts': return function (k) { return get(k).lastIndexOf(t, 0) === 0; };
+            case 'ends': return function (k) { var v = get(k); return v.length >= t.length && v.indexOf(t, v.length - t.length) !== -1; };
+            case 'eq': return function (k) { return get(k) === t; };
+            case 'neq': return function (k) { return get(k) !== t; };
+            case 'gt': return function (k) { return get(k) > t; };
+            case 'gte': return function (k) { return get(k) >= t; };
+            case 'lt': return function (k) { return get(k) < t; };
+            case 'lte': return function (k) { return get(k) <= t; };
+        }
+        return null;
+    };
+
+    proto.applyFilters = function () {
+        var preds = [], i, j;
+        for (i = 0; i < this.cols.length; i++) {
+            var col = this.cols[i], fn = this._predicate(col);
+            col.$filterBtn.toggleClass('jts-filter-active', !!fn);
+            if (fn) preds.push({ ci: i, fn: fn });
+        }
+
+        var visible = 0, rows = this.rows;
+        for (i = 0; i < rows.length; i++) {
+            var row = rows[i], show = true;
+            for (j = 0; j < preds.length; j++) {
+                if (!preds[j].fn(this._key(row, preds[j].ci))) { show = false; break; }
+            }
+            if (row.vis !== show) { row.el.style.display = show ? '' : 'none'; row.vis = show; }
+            if (show) visible++;
+        }
+
+        var info = { visible: visible, total: rows.length };
+        this.$table.trigger('tablesearch:filter', [info]);
+        if (typeof this.opts.onFilter === 'function') this.opts.onFilter.call(this.table, info);
+        return this;
+    };
+
+    proto.clearFilters = function () {
+        $.each(this.cols, function (_, c) {
+            if (!c.filterable) return;
+            c.$select.prop('selectedIndex', 0);
+            c.$input.val('');
+            c.$picker.val('');
+        });
+        for (var i = 0; i < this.cols.length; i++) {
+            if (!this.cols[i].filterable) continue;
+            this._updateClearIcon(this.cols[i]);
+            this._updateValueVisibility(this.cols[i]);
+        }
+        clearTimeout(this.timer);
+        return this.applyFilters();
+    };
+
+    // ---------------------------------------------------------------- sorting
+
+    proto._setSort = function (ci, dir) {
+        this.sort = { col: ci, dir: dir };
+        $.each(this.cols, function (_, c) {
+            c.$sortBtn.removeClass('sort-active sort-desc').html(ICONS.sortHeader);
+            c.$th.removeAttr('aria-sort');
+            c.$popup.find('.jts-sort-check').hide();
+            c.$popup.find('.jts-sort-item').removeAttr('aria-current');
+        });
+        if (ci > -1) {
+            var c = this.cols[ci];
+            c.$sortBtn.addClass('sort-active').toggleClass('sort-desc', dir === 'desc')
+                .html(dir === 'desc' ? ICONS.sortDesc : ICONS.sortAsc);
+            c.$th.attr('aria-sort', dir === 'desc' ? 'descending' : 'ascending');
+            var $active = c.$popup.find('.jts-sort-item[data-action="' + dir + '"]').attr('aria-current', 'true');
+            $active.find('.jts-sort-check').css('display', 'inline-flex');
+        }
+        this._applySort();
+        var info = { column: ci, direction: dir };
+        this.$table.trigger('tablesearch:sort', [info]);
+        if (typeof this.opts.onSort === 'function') this.opts.onSort.call(this.table, info);
+    };
+
+    proto._applySort = function () {
+        var tbody = this.table.tBodies[0];
+        if (!tbody) return;
+        var ci = this.sort.col, rows = this.rows.slice(), self = this;
+
+        if (ci < 0) {
+            rows.sort(function (a, b) { return a.idx - b.idx; });
+        } else {
+            var type = this.cols[ci].type, mul = this.sort.dir === 'desc' ? -1 : 1;
+            var emptyLast = this.opts.emptyLast, collator = this.collator;
+            rows.sort(function (a, b) {
+                var ka = self._key(a, ci), kb = self._key(b, ci), va, vb, ea, eb, res;
+                if (type === 'string') { va = ka.src; vb = kb.src; ea = va === ''; eb = vb === ''; }
+                else {
+                    va = type === 'numeric' ? ka.num : ka.date;
+                    vb = type === 'numeric' ? kb.num : kb.date;
+                    ea = va !== va; eb = vb !== vb; // NaN check
+                }
+                if (ea || eb) {
+                    if (ea && eb) return a.idx - b.idx;
+                    res = ea ? 1 : -1;
+                    return emptyLast ? res : -res * mul;
+                }
+                res = (type === 'string' ? collator.compare(va, vb) : va - vb) * mul;
+                return res || a.idx - b.idx; // stable tie-break
+            });
+        }
+
+        // One DOM write: rebuild order in a fragment.
+        var frag = tbody.ownerDocument.createDocumentFragment();
+        for (var i = 0; i < rows.length; i++) frag.appendChild(rows[i].el);
+        tbody.appendChild(frag);
+    };
+
+    proto.clearSort = function () { this._setSort(-1, null); return this; };
+
+    // ---------------------------------------------------------------- state / teardown
+
+    proto.getState = function () {
+        var self = this;
+        return {
+            filters: $.map(this.cols, function (c) {
+                if (!c.filterable) return null;
+                var v = $.trim(c.$input.val()), op = c.$select.val();
+                return (v || op === 'empty' || op === 'not_empty') ? { column: c.index, operator: op, value: v } : null;
+            }),
+            sort: { column: this.sort.col, direction: this.sort.dir },
+            visibleRows: $.grep(self.rows, function (r) { return r.vis; }).length,
+            totalRows: self.rows.length
+        };
+    };
+
+    proto.destroy = function () {
+        clearTimeout(this.timer);
+        this.$table.off(this.ns);
+        $(document).off(this.ns);
+        $(window).off(this.ns);
+
+        $.each(this.cols, function (_, c) { c.$th.removeAttr('aria-sort').html(c.origHtml); });
+
+        for (var r = 0; r < this.rows.length; r++) {
+            var cells = this.rows[r].el.cells;
+            for (var k = 0; k < cells.length; k++) {
+                var cell = cells[k];
+                if (!cell.hasAttribute('data-jts-fmt')) continue;
+                if ($.trim(cell.textContent) === cell.getAttribute('data-jts-fmt')) cell.textContent = cell.getAttribute('data-jts-orig');
+                if (cell.hasAttribute('data-jts-sv')) cell.removeAttribute('data-sort-value');
+                cell.removeAttribute('data-jts-fmt'); cell.removeAttribute('data-jts-orig'); cell.removeAttribute('data-jts-sv');
+            }
+        }
+
+        this.sort = { col: -1, dir: null };
+        for (var i = 0; i < this.rows.length; i++) { this.rows[i].el.style.display = ''; this.rows[i].vis = true; }
+        this._applySort();
+
+        this.$table.removeData(DATA_KEY);
+    };
+
+    // ---------------------------------------------------------------- plugin entry
+
+    var PUBLIC_METHODS = { refresh: 1, applyFilters: 1, clearFilters: 1, clearSort: 1, getState: 1, destroy: 1 };
+
+    $.fn.tableSearch = function (arg) {
+        if (typeof arg === 'string') {
+            if (!PUBLIC_METHODS[arg]) throw new Error('tableSearch: unknown method "' + arg + '"');
+            var result;
+            this.each(function () {
+                var inst = $.data(this, DATA_KEY);
+                if (!inst) return;
+                var r = inst[arg]();
+                if (arg === 'getState' && result === undefined) result = r;
+            });
+            return result === undefined ? this : result;
+        }
+
+        var options = $.extend(true, {}, $.fn.tableSearch.defaults, arg);
+        if (arg && arg.debounce !== undefined && arg.debounceTime === undefined) options.debounceTime = arg.debounce; // legacy
+        options.numericRegex = toGlobalRegex(options.numericRegex);
+        options.debounceTime = Math.max(0, +options.debounceTime || 0);
+        return this.each(function () {
+            if (this.tagName !== 'TABLE' || $.data(this, DATA_KEY)) return;
+            $.data(this, DATA_KEY, new TableSearch(this, options));
+        });
+    };
+
+    $.fn.tableSearch.defaults = DEFAULTS;
+    $.fn.tableSearch.parseNumber = parseNumber;
+    $.fn.tableSearch.parseDate = parseDate;
+    $.fn.tableSearch.compileDateFormat = compileDateFormat;
+    $.fn.tableSearch.formatDate = formatDate;
+
+    return $;
+});

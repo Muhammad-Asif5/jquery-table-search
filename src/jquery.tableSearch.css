@@ -1,0 +1,148 @@
+ /* Minimal custom CSS for the plugin structure */
+ th {
+     position: relative;
+     vertical-align: middle;
+     white-space: nowrap;
+     user-select: none;
+ }
+
+ /* Header Content Layout */
+ .jts-header-content {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     gap: 10px;
+     cursor: pointer;
+ }
+
+ .jts-header-icons {
+     display: flex;
+     align-items: center;
+     gap: 5px;
+ }
+
+ /* Clickable Icon Buttons */
+ .jts-icon-btn {
+     color: #6c757d;
+     display: flex;
+     align-items: center;
+     padding: 2px 4px;
+     border-radius: 4px;
+     transition: all 0.2s;
+     cursor: pointer;
+ }
+
+ .jts-icon-btn:hover {
+     color: #212529;
+     background-color: #e9ecef;
+ }
+
+ /* Active Sort State */
+ .jts-icon-btn.sort-active {
+     color: #0d6efd;
+ }
+
+ /* Popup Dialog Positioning */
+ .jts-popup {
+     display: none;
+     position: absolute;
+     top: 100%;
+     left: 0;
+     z-index: 1050;
+     margin-top: 4px;
+     min-width: 280px;
+     background-color: #fff;
+     border: 1px solid rgba(0, 0, 0, .15);
+     border-radius: 0.375rem;
+ }
+
+ .jts-popup.active {
+     display: block;
+ }
+
+ /* Custom Input Group Icons */
+ .jts-input-group-text {
+     background-color: transparent;
+     border: none;
+     padding-right: 0;
+     color: #212529;
+ }
+
+ .jts-input-group-text svg {
+     width: 18px;
+     height: 18px;
+     stroke: currentColor;
+     stroke-width: 2;
+     fill: none;
+     stroke-linecap: round;
+     stroke-linejoin: round;
+ }
+
+ /* Clear Button styling inside input */
+ .jts-clear-btn {
+     position: absolute;
+     right: 5px;
+     top: 50%;
+     transform: translateY(-50%);
+     cursor: pointer;
+     color: #adb5bd;
+     z-index: 10;
+     display: none;
+     align-items: center;
+ }
+
+ .jts-clear-btn:hover {
+     color: #dc3545;
+ }
+
+ .jts-clear-btn svg {
+     width: 14px;
+     height: 14px;
+     stroke: currentColor;
+     stroke-width: 2;
+     fill: none;
+     stroke-linecap: round;
+ }
+
+ .jts-input {
+     padding-right: 30px;
+ }
+
+ /* Sort Menu Items */
+ .jts-sort-item {
+     display: flex;
+     align-items: center;
+     gap: 12px;
+     padding: 8px 16px;
+     cursor: pointer;
+     color: #212529;
+     text-decoration: none;
+     transition: background 0.1s;
+     font-size: 0.9rem;
+ }
+
+ .jts-sort-item:hover {
+     background-color: #f8f9fa;
+ }
+
+ .jts-sort-item svg {
+     width: 18px;
+     height: 18px;
+     stroke: #212529;
+     stroke-width: 2;
+     fill: none;
+     stroke-linecap: round;
+     stroke-linejoin: round;
+ }
+
+ .jts-sort-item .jts-sort-check {
+     align-self: center;
+ }
+
+ input.form-control.jts-input:focus {
+     color: var(--bs-body-color);
+     background-color: var(--bs-body-bg);
+     border-color: #e7f1ff;
+     outline: 0;
+     box-shadow: 0 0 0 .20rem rgb(177 208 255 / 25%);
+ }

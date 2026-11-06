@@ -1,0 +1,11 @@
+{
+  "name": "jquery-table-search",
+  "version": "2.0.0",
+  "description": "jQuery plugin for Bootstrap 5 tables: Excel-style per-column filtering (text, number, date, currency) and sorting from the header.",
+  "main": "src/jquery.tableSearch.js",
+  "files": ["src", "README.md", "LICENSE"],
+  "keywords": ["jquery", "jquery-plugin", "bootstrap5", "table", "table-filter", "table-sort", "datatable", "filter", "sort", "html-table"],
+  "license": "MIT",
+  "author": "Muhammad Asif",
+  "peerDependencies": { "jquery": ">=3.0.0" }
+}
