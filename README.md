@@ -21,7 +21,7 @@ A lightweight jQuery plugin that adds **Excel-style per-column filtering and sor
 
 ## Demo
 
-Open [`https://muhammad-asif5.github.io/jquery-table-search/`](demo) in a browser, or enable **GitHub Pages** for this repository (Settings, then Pages, then deploy from the `main` branch) and visit `https://<your-username>.github.io/jquery-table-search/demo/`.
+Open [`demo`](https://muhammad-asif5.github.io/jquery-table-search/) in a browser, or enable **GitHub Pages** for this repository (Settings, then Pages, then deploy from the `main` branch) and visit `https://<your-username>.github.io/jquery-table-search/demo/`.
 
 ## Requirements
 
