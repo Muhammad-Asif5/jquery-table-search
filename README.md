@@ -74,8 +74,14 @@ Or load them from jsDelivr once you have created a release tag (replace `<your-u
 <script src="src/jquery.tableSearch.js"></script>
 <script>
     $('#myTable').tableSearch({
-        dateFormat: 'YYYY/MM/DD',   // how the date cells are written
-        currencySymbol: '$'
+        showSortIcon: true,
+        showFilterIcon: true,
+        debounceTime: 300,
+        dateFormat: 'YYYY/MM/DD',
+        numericRegex: /[^0-9.-]+/g,
+        currencySymbol: 'Rs',        // '$', 'Rs', 'PKR', '€' ...
+        currencyPosition: 'prefix',  // or 'suffix'
+        currencyFormatCells: true
     });
 </script>
 ```
