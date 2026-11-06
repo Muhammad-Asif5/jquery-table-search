@@ -13,6 +13,7 @@ A lightweight jQuery plugin that adds **Excel-style per-column filtering and sor
   - Date: equals, does not equal, after, before, empty, not empty
 - **Date filter** is a text field that opens the browser's native calendar on focus. You can also type the date in your own format.
 - **Sorting** by clicking the header or the sort icon: ascending, descending, then back to the original order. Text sorts naturally (`item2` before `item10`), and empty cells always go last.
+- **Default order**: tables with a sortable `Name` column are initially sorted by that column ascending.
 - **Currency columns** show a configurable symbol in the cells and in the filter field (`$`, `Rs`, `PKR`, `€` ...).
 - **Configurable parsing**: your own date format (`DD/MM/YYYY`, `YYYY-MM-DD` ...) and your own numeric clean-up regex.
 - **Fast on large tables**: values are parsed once and cached, typing is debounced, and sorting reorders the DOM in one write.

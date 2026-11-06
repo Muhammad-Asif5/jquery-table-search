@@ -70,6 +70,8 @@
         collator: { numeric: true, sensitivity: 'base' },
         onFilter: null,                // function (info) {}
         onSort: null,                  // function (info) {}
+        defaultSortColumn: null,    // index (number) or header text (string) to sort by on init
+        defaultSortDirection: 'asc', // 'asc' | 'desc'
         labels: {
             sort: 'Sort',
             filter: 'Filter',
@@ -211,6 +213,7 @@
         this._build();
         this._bind();
         this.refresh();
+        this._applyDefaultSort();
     }
 
     var proto = TableSearch.prototype;
@@ -735,6 +738,30 @@
         this._applySort();
 
         this.$table.removeData(DATA_KEY);
+    };
+
+    // Resolves opts.defaultSortColumn (index or header text) and applies the initial sort.
+    proto._applyDefaultSort = function () {
+        var target = this.opts.defaultSortColumn;
+        if (target === null || target === undefined || target === '') return;
+
+        var ci = -1, i;
+
+        if (typeof target === 'number') {
+            ci = target;
+        } else {
+            // Match by header text (case-insensitive), first match wins
+            var needle = String(target).trim().toLowerCase();
+            for (i = 0; i < this.cols.length; i++) {
+                if (this.cols[i].headerText.toLowerCase() === needle) { ci = i; break; }
+            }
+        }
+
+        // Validate: column must exist and be sortable
+        if (ci < 0 || ci >= this.cols.length || !this.cols[ci].sortable) return;
+
+        var dir = String(this.opts.defaultSortDirection || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+        this._setSort(ci, dir);
     };
 
     // ---------------------------------------------------------------- plugin entry

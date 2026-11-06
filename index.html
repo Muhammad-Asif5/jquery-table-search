@@ -24,11 +24,11 @@
         </thead>
         <tbody>
             <tr><td>Airi Satou</td><td>Accountant</td><td>Tokyo</td><td>5407</td><td>2008/11/28</td><td>$162,700</td></tr>
+            <tr><td>Zorita Serrano</td><td>Software Engineer</td><td>San Francisco</td><td>1223</td><td>2008/06/01</td><td>$150,000</td></tr>
             <tr><td>Angelica Ramos</td><td>Chief Executive Officer (CEO)</td><td>London</td><td>5797</td><td>2009/10/09</td><td>$1,200,000</td></tr>
             <tr><td>Ashton Cox</td><td>Junior Technical Author</td><td>San Francisco</td><td>1562</td><td>2009/01/12</td><td>$86,000</td></tr>
             <tr><td>Bradley Greer</td><td>Software Engineer</td><td>London</td><td>2558</td><td>2012/10/13</td><td>$132,000</td></tr>
             <tr><td>Cedric Kelly</td><td>Senior Javascript Developer</td><td>Edinburgh</td><td>6224</td><td>2012/03/29</td><td>$433,060</td></tr>
-            <tr><td>Zorita Serrano</td><td>Software Engineer</td><td>San Francisco</td><td>1223</td><td>2008/06/01</td><td>$150,000</td></tr>
         </tbody>
     </table>
 
@@ -44,7 +44,9 @@
             numericRegex: /[^0-9.-]+/g,
             currencySymbol: 'Rs',        // '$', 'Rs', 'PKR', '€' ...
             currencyPosition: 'prefix',  // or 'suffix'
-            currencyFormatCells: true
+            currencyFormatCells: true,
+            defaultSortColumn: 'Name', 
+            defaultSortDirection: 'asc'
         });
     </script>
 </body>
