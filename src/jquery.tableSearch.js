@@ -41,7 +41,33 @@
         close: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
         sortAsc: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path><path d="M11 12h4"></path><path d="M11 16h7"></path><path d="M11 20h10"></path></svg>',
         sortDesc: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"></path><path d="M7 20V4"></path><path d="M11 4h10"></path><path d="M11 8h7"></path><path d="M11 12h4"></path></svg>',
-        clearSort: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-8-8"></path><path d="M3 4h12"></path><path d="M3 8h9"></path><path d="M3 12h6"></path><path d="m13 21 8-8"></path></svg>'
+        clearSort: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-8-8"></path><path d="M3 4h12"></path><path d="M3 8h9"></path><path d="M3 12h6"></path><path d="m13 21 8-8"></path></svg>',
+
+        // ---- operator icons (corrected mapping) ----
+        // contains            → box [ ] (bracket frame)
+        op_contains:     '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3h4v18h-4z"></path><path d="M18 8h3v9h-3"></path><path d="M6 17H3V8h3"></path></svg>',
+                // not_contains        → box + slash
+        op_not_contains: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4 9 20"></path><path d="M3 8h18v9H3z"></path></svg>',
+        // eq / equals         → two horizontal lines
+        op_eq:           '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="9" y2="9"></line><line x1="5" x2="19" y1="15" y2="15"></line></svg>',
+        // neq                 → lines + slash
+        op_neq:          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"></path><path d="M5 15h14"></path><path d="M15 5 9 19"></path></svg>',
+        // starts              → left bar + box
+        op_starts:       '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h4v18H3z"></path><path d="M11 8h10v9H11"></path></svg>',
+        // ends                → right bar + box
+        op_ends:         '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3h-4v18h4z"></path><path d="M13 8H3v9h10"></path></svg>',
+        // gt / after          → chevron-right
+        op_gt:           '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>',
+        // gte                 → double chevron-right
+        op_gte:          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 16 6-6-6-6"></path><path d="m9 21 6-6"></path></svg>',
+        // lt / before         → chevron-left
+        op_lt:           '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>',
+        // lte                 → double chevron-left
+        op_lte:          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 16-6-6 6-6"></path><path d="m15 21-6-6"></path></svg>',
+        // empty               → circle
+        op_empty:        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>',
+        // not_empty           → circle + slash
+        op_not_empty:    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="9" x2="15" y1="15" y2="9"></line></svg>'
     };
 
     var CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
@@ -53,7 +79,7 @@
     };
 
     var DEFAULTS = {
-        showSortIcon: true,            // show the sort icon in headers (and sort items in the popup)
+showSortIcon: true,            // show the sort icon in headers (and sort items in the popup)
         showFilterIcon: true,          // show the filter (bars) icon in headers and enable the filter popup
         sortOnHeaderClick: true,       // clicking anywhere on a sortable header (not just the icon) cycles asc -> desc -> off
         debounceTime: 150,             // ms delay while typing in a filter input (legacy alias: debounce)
@@ -146,7 +172,7 @@
 
     function formatCurrency(n, symbol, position, nf) {
         var str = nf.format(Math.abs(n));
-        var gap = /[A-Za-z]$/.test(symbol) ? ' ' : ''; // 'Rs 1,200' but '$1,200'
+        var gap = /[A-Za-z]$/.test(symbol) ? ' ' : '';
         var body = position === 'suffix' ? str + gap + symbol : symbol + gap + str;
         return (n < 0 ? '-' : '') + body;
     }
@@ -176,7 +202,7 @@
             var y, mo, d, a = +m[1], b = +m[2], c = +m[3];
             if (m[1].length === 4) { y = a; mo = b; d = c; }
             else if (m[3].length === 4) { y = c; if (order === 'mdy') { mo = a; d = b; } else { d = a; mo = b; } }
-            else return NaN; // ambiguous 2-digit years
+            else return NaN;
             var t = Date.UTC(y, mo - 1, d), dt = new Date(t);
             return (dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d) ? t : NaN;
         }
@@ -224,6 +250,19 @@
         return L.operators[op] || op;
     };
 
+    proto._opIconStyle = function (op) {
+        var svg = ICONS['op_' + op];
+        if (!svg) return '';
+        var enc = encodeURIComponent(svg.replace(/currentColor/g, '#000'));
+        return 'background-image:url("data:image/svg+xml,' + enc + '");' +
+               'background-repeat:no-repeat;background-position:left 8px center;' +
+               'background-size:16px 16px;padding-left:30px;';
+    };
+
+    proto._opIconHtml = function (op) {
+        return ICONS['op_' + op] || ICONS.equal;
+    };
+
     proto._build = function () {
         var self = this, L = this.opts.labels;
         var $headRow = this.$table.children('thead').find('tr').last();
@@ -236,7 +275,7 @@
             if (dCur !== undefined && dCur !== false && String(dCur).toLowerCase() !== 'false') {
                 var custom = (typeof dCur === 'string' && dCur !== '' && dCur.toLowerCase() !== 'true') ? dCur : '';
                 currency = custom || self.opts.currencySymbol || '$';
-                type = 'numeric'; // a currency column is numeric for filtering and sorting
+                type = 'numeric';
             }
             var headerText = $.trim($th.text());
             var dSort = $th.data('sortable'), dFilter = $th.data('filterable');
@@ -245,7 +284,8 @@
             var col = {
                 index: index, type: type, currency: currency, $th: $th, origHtml: $th.html(), headerText: headerText,
                 sortable: sortable, filterable: filterable,
-                $sortBtn: $(), $filterBtn: $(), $popup: $(), $select: $(), $input: $(), $clear: $(), $valueGroup: $(), $picker: $()
+                $sortBtn: $(), $filterBtn: $(), $popup: $(), $select: $(), $input: $(), $clear: $(),
+                $valueGroup: $(), $picker: $(), $opIcon: $()
             };
 
             var $content = $('<div class="jts-header-content"></div>');
@@ -269,8 +309,16 @@
 
             var $select = $('<select class="form-select jts-select"></select>').attr('aria-label', L.filter + ' operator');
             $.each(OPERATORS[type], function (_, op) {
-                $select.append($('<option></option>').val(op).text(self._opLabel(type, op)));
+                var $opt = $('<option></option>').val(op).text(self._opLabel(type, op));
+                var style = self._opIconStyle(op);
+                if (style) $opt.attr('style', style);
+                $select.append($opt);
             });
+
+            (function paint() {
+                var first = $select[0].options[$select[0].selectedIndex];
+                if (first) $select[0].style.backgroundImage = first.style.backgroundImage || '';
+            })();
 
             var $input = $('<input class="form-control jts-input" placeholder="">')
                 .attr({ type: 'text', autocomplete: 'off', 'aria-label': headerText + ' ' + L.filter });
@@ -281,9 +329,9 @@
                 .attr({ title: L.clear, 'aria-label': L.clear }).html(ICONS.close);
 
             var $popup = $(
-                '<div class="jts-popup shadow" role="dialog">' +
+                '<div class="jts-popup" role="dialog">' +
                 '<div class="p-3 border-bottom">' +
-                '<div class="input-group input-group-sm mb-2"><span class="input-group-text jts-input-group-text">' + ICONS.equal + '</span></div>' +
+                '<div class="input-group input-group-sm mb-2"><span class="input-group-text jts-input-group-text jts-op-icon">' + ICONS.equal + '</span></div>' +
                 '<div class="input-group input-group-sm position-relative jts-value-group"><span class="input-group-text jts-input-group-text">' + ICONS.search + '</span></div>' +
                 '</div></div>'
             ).attr('aria-label', L.filter + ': ' + headerText);
@@ -291,8 +339,9 @@
             $popup.find('.input-group').eq(0).append($select);
             col.$valueGroup = $popup.find('.jts-value-group').append($input, $clear);
 
-            // Text field + native calendar: a visually hidden <input type="date"> sits under the text field
-            // and its picker is opened when the text field gets focus.
+            col.$opIcon = $popup.find('.jts-op-icon');
+            col.$opIcon.html(self._opIconHtml($select.val()));
+
             if (currency) col.$valueGroup.children('.input-group-text').empty().text(currency).attr('title', currency);
 
             if (type === 'date') {
@@ -307,7 +356,6 @@
                     var $item = $('<a href="#" class="jts-sort-item"></a>').attr('data-action', a[0])
                         .append(a[1]).append(document.createTextNode(' ' + a[2])).appendTo($items);
                     if (a[0] !== 'clear') {
-                        // tick shown at the right edge of the item that is currently applied
                         $('<span class="jts-sort-check" aria-hidden="true"></span>').html(CHECK_ICON)
                             .css({ display: 'none', 'float': 'right', marginLeft: 'auto' }).appendTo($item);
                     }
@@ -331,7 +379,7 @@
         var self = this, ns = this.ns;
         var $t = this.$table;
 
-        $t.on('click' + ns, '.jts-bars-btn', function (e) {
+        $t.on('click' + ns, '.jts-bars-btn', function () {
             var col = self._colOf(this); if (col) self._togglePopup(col);
         });
 
@@ -379,9 +427,17 @@
 
         $t.on('change' + ns, '.jts-select', function () {
             var col = self._colOf(this); if (!col) return;
+            var opt = this.options[this.selectedIndex];
+            if (opt) this.style.backgroundImage = opt.style.backgroundImage || '';
+            if (col.$opIcon && col.$opIcon.length) col.$opIcon.html(self._opIconHtml(this.value));
             self._updateValueVisibility(col);
             clearTimeout(self.timer);
             self.applyFilters();
+        });
+
+        $t.on('keyup' + ns, '.jts-select', function () {
+            var col = self._colOf(this); if (!col) return;
+            if (col.$opIcon && col.$opIcon.length) col.$opIcon.html(self._opIconHtml(this.value));
         });
 
         $t.on('click' + ns, '.jts-clear-btn', function (e) {
@@ -414,7 +470,7 @@
         $(document).on('click' + ns, function (e) {
             if (self.openCol === -1) return;
             var $tgt = $(e.target);
-            if (!$tgt.closest('.jts-popup, .jts-bars-btn', self.table).length) self._closePopups(); // header label/sort icon/anywhere else closes it
+            if (!$tgt.closest('.jts-popup, .jts-bars-btn', self.table).length) self._closePopups();
         });
 
         $(window).on('resize' + ns, function () {
@@ -426,9 +482,9 @@
 
     proto._position = function (col) {
         var $p = col.$popup;
-        $p.css({ left: '0', right: 'auto' });
+        $p.css({ left: 'auto', right: '0' });
         var right = $p[0].getBoundingClientRect().right;
-        if (right > document.documentElement.clientWidth) $p.css({ left: 'auto', right: '0' });
+        if (right > document.documentElement.clientWidth) $p.css({ left: '0', right: 'auto' });
     };
 
     proto._togglePopup = function (col) {
@@ -452,8 +508,8 @@
 
     proto._openPicker = function (col) {
         var p = col.$picker[0], now = Date.now();
-        if (!p || typeof p.showPicker !== 'function') return; // older browsers: user just types the date
-        if (col.pickerAt && now - col.pickerAt < 400) return;  // focus + click fire together on a mouse click
+        if (!p || typeof p.showPicker !== 'function') return;
+        if (col.pickerAt && now - col.pickerAt < 400) return;
         col.pickerAt = now;
         try { p.showPicker(); } catch (e) { /* needs user activation / already open */ }
     };
@@ -518,13 +574,13 @@
             if (!col.currency) continue;
             for (var i = 0; i < this.rows.length; i++) {
                 var cell = this.rows[i].el.cells[ci];
-                if (!cell || cell.children.length) continue;               // don't destroy nested markup
+                if (!cell || cell.children.length) continue;
                 var cur = $.trim(cell.textContent);
-                if (cur === '' || cell.getAttribute('data-jts-fmt') === cur) continue; // empty, or already ours
+                if (cur === '' || cell.getAttribute('data-jts-fmt') === cur) continue;
                 var ours = cell.hasAttribute('data-jts-fmt');
                 var userSv = cell.hasAttribute('data-sort-value') && !ours;
                 var n = parseNumber(userSv ? cell.getAttribute('data-sort-value') : cur, o.decimalSeparator, o.numericRegex);
-                if (n !== n) continue;                                      // not a number: leave as is
+                if (n !== n) continue;
                 var dec = (String(Math.abs(n)).split('.')[1] || '').length;
                 var text = formatCurrency(n, col.currency, o.currencyPosition, this._numberFormat(dec > 0 ? Math.max(2, dec) : 0));
                 cell.setAttribute('data-jts-orig', cur);
@@ -581,7 +637,7 @@
         if (col.type === 'numeric') { t = parseNumber(raw, this.opts.decimalSeparator, this.opts.numericRegex); get = function (k) { return k.num; }; }
         else if (col.type === 'date') { t = this._parseSearchDate(raw); get = function (k) { return k.date; }; }
         else { t = raw.toLowerCase(); get = function (k) { return k.lower; }; }
-        if (typeof t === 'number' && isNaN(t)) return null; // unparseable input => filter inactive
+        if (typeof t === 'number' && isNaN(t)) return null;
 
         switch (op) {
             case 'contains': return function (k) { return get(k).indexOf(t) > -1; };
@@ -623,11 +679,15 @@
     };
 
     proto.clearFilters = function () {
+        var self = this;
         $.each(this.cols, function (_, c) {
             if (!c.filterable) return;
             c.$select.prop('selectedIndex', 0);
             c.$input.val('');
             c.$picker.val('');
+            var first = c.$select[0].options[0];
+            c.$select[0].style.backgroundImage = first ? (first.style.backgroundImage || '') : '';
+            if (c.$opIcon && c.$opIcon.length) c.$opIcon.html(self._opIconHtml(c.$select.val()));
         });
         for (var i = 0; i < this.cols.length; i++) {
             if (!this.cols[i].filterable) continue;
@@ -678,7 +738,7 @@
                 else {
                     va = type === 'numeric' ? ka.num : ka.date;
                     vb = type === 'numeric' ? kb.num : kb.date;
-                    ea = va !== va; eb = vb !== vb; // NaN check
+                    ea = va !== va; eb = vb !== vb;
                 }
                 if (ea || eb) {
                     if (ea && eb) return a.idx - b.idx;
@@ -686,11 +746,10 @@
                     return emptyLast ? res : -res * mul;
                 }
                 res = (type === 'string' ? collator.compare(va, vb) : va - vb) * mul;
-                return res || a.idx - b.idx; // stable tie-break
+                return res || a.idx - b.idx;
             });
         }
 
-        // One DOM write: rebuild order in a fragment.
         var frag = tbody.ownerDocument.createDocumentFragment();
         for (var i = 0; i < rows.length; i++) frag.appendChild(rows[i].el);
         tbody.appendChild(frag);
@@ -782,7 +841,7 @@
         }
 
         var options = $.extend(true, {}, $.fn.tableSearch.defaults, arg);
-        if (arg && arg.debounce !== undefined && arg.debounceTime === undefined) options.debounceTime = arg.debounce; // legacy
+        if (arg && arg.debounce !== undefined && arg.debounceTime === undefined) options.debounceTime = arg.debounce;
         options.numericRegex = toGlobalRegex(options.numericRegex);
         options.debounceTime = Math.max(0, +options.debounceTime || 0);
         return this.each(function () {
