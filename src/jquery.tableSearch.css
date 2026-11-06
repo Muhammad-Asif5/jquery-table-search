@@ -204,5 +204,8 @@
      background-color: var(--bs-body-bg);
      border-color: #e7f1ff;
      outline: 0;
-     box-shadow: 0 0 0 .20rem rgb(177 208 255 / 25%);
+     box-shadow: 0 0 0 .10rem rgb(177 208 255 / 25%);
+ }
+ button.btn.btn-outline-secondary.jts-date-picker-btn {
+    border:var(--bs-btn-border-width) solid #d9d9d9;
  }
