@@ -102,6 +102,7 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             sort: 'Sort',
             filter: 'Filter',
             clear: 'Clear',
+            datePicker: 'Choose date',
             sortAsc: 'Sort Ascending',
             sortDesc: 'Sort Descending',
             clearSort: 'Clear sort',
@@ -345,6 +346,11 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             if (currency) col.$valueGroup.children('.input-group-text').empty().text(currency).attr('title', currency);
 
             if (type === 'date') {
+                col.$valueGroup.addClass('jts-date-group');
+                col.$datePickerBtn = $('<button type="button" class="btn btn-outline-secondary jts-date-picker-btn"></button>')
+                    .attr('aria-label', L.datePicker)
+                    .html('<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg>')
+                    .appendTo(col.$valueGroup);
                 col.$picker = $('<input type="date" class="jts-date-picker" tabindex="-1" aria-hidden="true">')
                     .css({ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '1px', padding: 0, border: 0, opacity: 0, pointerEvents: 'none' })
                     .appendTo(col.$valueGroup);
@@ -409,8 +415,8 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             self.timer = setTimeout(function () { self.applyFilters(); }, self.opts.debounceTime);
         });
 
-        // Date columns: show the calendar when the text field gets focus (or is clicked again)
-        $t.on('focusin' + ns + ' click' + ns, '.jts-input', function () {
+        // Keep typing in the date field uninterrupted; open the native calendar on explicit request.
+        $t.on('click' + ns, '.jts-date-picker-btn', function () {
             var col = self._colOf(this);
             if (col && col.type === 'date') self._openPicker(col);
         });

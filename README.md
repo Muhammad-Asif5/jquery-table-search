@@ -11,7 +11,7 @@ A lightweight jQuery plugin that adds **Excel-style per-column filtering and sor
   - Text: contains, does not contain, equals, does not equal, starts, ends, empty, not empty
   - Number and currency: equals, does not equal, greater/less than (or equal), empty, not empty
   - Date: equals, does not equal, after, before, empty, not empty
-- **Date filter** is a text field that opens the browser's native calendar on focus. You can also type the date in your own format.
+- **Date filter** is a text field for typing dates in your own format, with a separate button to open the browser's native calendar.
 - **Sorting** by clicking the header or the sort icon: ascending, descending, then back to the original order. Text sorts naturally (`item2` before `item10`), and empty cells always go last.
 - **Default order**: tables with a sortable `Name` column are initially sorted by that column ascending.
 - **Currency columns** show a configurable symbol in the cells and in the filter field (`$`, `Rs`, `PKR`, `€` ...).
@@ -127,7 +127,7 @@ $('#myTable').tableSearch({ /* options */ });
 | `collator` | `{ numeric: true, sensitivity: 'base' }` | Options for `Intl.Collator`. |
 | `onFilter` | `null` | `function (info)` called after filtering, with `{ visible, total }`. |
 | `onSort` | `null` | `function (info)` called after sorting, with `{ column, direction }`. |
-| `labels` | English strings | Override any button, operator or sort label, for localisation. |
+| `labels` | English strings | Override any button (including `datePicker`), operator or sort label, for localisation. |
 
 Defaults can also be changed globally through `$.fn.tableSearch.defaults`.
 
@@ -135,7 +135,7 @@ Defaults can also be changed globally through `$.fn.tableSearch.defaults`.
 
 Cells are read with `dateFormat`. A cell that does not match it is treated as empty, so it is left out of Equals, After and Before. If that happens, the browser console shows a warning that names the column and an example cell.
 
-The filter field takes a date in the same format (or ISO style), or a day picked from the calendar, which is written back in your `dateFormat`.
+The filter field takes a date in the same format (or ISO style). Focus the field to type without opening the calendar; use the calendar button to pick a day, which is written back in your `dateFormat`.
 
 ### Currency
 
