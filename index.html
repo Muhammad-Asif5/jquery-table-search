@@ -46,7 +46,10 @@
             currencyPosition: 'prefix',  // or 'suffix'
             currencyFormatCells: true,
             defaultSortColumn: 'Name', 
-            defaultSortDirection: 'asc'
+            defaultSortDirection: 'asc',
+            showLogicOperator: true,     // 2nd condition joined by AND / OR in every column popup
+            defaultLogic: 'and',         // initial AND / OR choice: 'and' | 'or'
+            columnLogic: 'and'           // how filters of different columns combine: 'and' | 'or'
         });
     </script>
 </body>

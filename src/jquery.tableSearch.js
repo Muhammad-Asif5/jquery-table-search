@@ -1,6 +1,9 @@
 /*!
  * jQuery tableSearch 2.0
- * Per-column filtering (AND across columns) and single-column sorting for HTML tables.
+ * Per-column filtering and single-column sorting for HTML tables.
+ * Each column popup can hold two conditions joined by an AND / OR radio choice (option showLogicOperator, off by default;
+ * when on, the radios and 2nd condition stay hidden until the 1st field is filled in);
+ * filters of different columns are combined with AND or OR (option columnLogic).
  *
  * Usage:
  *   $('#myTable').tableSearch({ dateOrder: 'dmy', debounce: 150 });
@@ -15,6 +18,7 @@
  * (also works as "true" to enable on a column when the global option is off).
  * Currency columns: <th data-currency> (uses the global currencySymbol) or <th data-currency="Rs"> (own symbol).
  * The column becomes numeric, its cells are shown as symbol + grouped number, and the filter field shows the symbol.
+ * Per-column override of the logic radios: <th data-logic="false"> / <th data-logic="true"> turns the radios (and 2nd condition) off / on for that column.
  * Optional per-cell override for sorting/filtering: <td data-sort-value="...">.
  *
  * Events on the table: "tablesearch:filter" ({visible,total}), "tablesearch:sort" ({column,direction}).
@@ -36,6 +40,8 @@
     var ICONS = {
         sortHeader: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"></path><path d="m11 16-4 4-4-4"></path><path d="M7 4v16"></path><path d="M15 8h6"></path><path d="M15 16h6"></path><path d="M13 12h8"></path></svg>',
         bars: '<svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line></svg>',
+        // shown instead of the bars icon while the column has an active filter
+        filterActive: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>',
         equal: '<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line></svg>',
         search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
         close: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
@@ -98,14 +104,21 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         onSort: null,                  // function (info) {}
         defaultSortColumn: null,    // index (number) or header text (string) to sort by on init
         defaultSortDirection: 'asc', // 'asc' | 'desc'
+        showLogicOperator: false,      // true = a 2nd condition + AND / OR radios appear in a column popup once the 1st field has a value
+        defaultLogic: 'and',           // initially selected radio: 'and' | 'or'
+        columnLogic: 'and',            // how the filters of DIFFERENT columns combine: 'and' | 'or'
         labels: {
             sort: 'Sort',
             filter: 'Filter',
+            filtered: 'Filtered - click to edit',
             clear: 'Clear',
             datePicker: 'Choose date',
             sortAsc: 'Sort Ascending',
             sortDesc: 'Sort Descending',
             clearSort: 'Clear sort',
+            and: 'AND',
+            or: 'OR',
+            logic: 'Logical operator',
             operators: {
                 contains: 'Contains', not_contains: 'Does not contain',
                 eq: 'Equals', neq: 'Does not equal',
@@ -308,52 +321,21 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             col.$filterBtn = $('<span class="jts-icon-btn jts-bars-btn" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"></span>')
                 .attr({ title: L.filter, 'aria-label': L.filter + ': ' + headerText }).html(ICONS.bars).appendTo($icons);
 
-            var $select = $('<select class="form-select jts-select"></select>').attr('aria-label', L.filter + ' operator');
-            $.each(OPERATORS[type], function (_, op) {
-                var $opt = $('<option></option>').val(op).text(self._opLabel(type, op));
-                var style = self._opIconStyle(op);
-                if (style) $opt.attr('style', style);
-                $select.append($opt);
-            });
-
-            (function paint() {
-                var first = $select[0].options[$select[0].selectedIndex];
-                if (first) $select[0].style.backgroundImage = first.style.backgroundImage || '';
-            })();
-
-            var $input = $('<input class="form-control jts-input" placeholder="">')
-                .attr({ type: 'text', autocomplete: 'off', 'aria-label': headerText + ' ' + L.filter });
-            if (type === 'numeric') $input.attr('inputmode', 'decimal');
-            if (type === 'date') $input.attr('placeholder', self.displayDateFormat);
-
-            var $clear = $('<span class="jts-clear-btn" role="button" tabindex="0"></span>')
-                .attr({ title: L.clear, 'aria-label': L.clear }).html(ICONS.close);
+            var dLogic = $th.data('logic');
+            col.showLogic = dLogic === undefined ? !!self.opts.showLogicOperator : !!dLogic;
+            col.conds = [];
 
             var $popup = $(
                 '<div class="jts-popup" role="dialog">' +
-                '<div class="p-3 border-bottom">' +
-                '<div class="input-group input-group-sm mb-2"><span class="input-group-text jts-input-group-text jts-op-icon">' + ICONS.equal + '</span></div>' +
-                '<div class="input-group input-group-sm position-relative jts-value-group"><span class="input-group-text jts-input-group-text">' + ICONS.search + '</span></div>' +
-                '</div></div>'
+                '<div class="p-3 border-bottom jts-conditions"></div>' +
+                '</div>'
             ).attr('aria-label', L.filter + ': ' + headerText);
+            var $box = $popup.children('.jts-conditions');
 
-            $popup.find('.input-group').eq(0).append($select);
-            col.$valueGroup = $popup.find('.jts-value-group').append($input, $clear);
-
-            col.$opIcon = $popup.find('.jts-op-icon');
-            col.$opIcon.html(self._opIconHtml($select.val()));
-
-            if (currency) col.$valueGroup.children('.input-group-text').empty().text(currency).attr('title', currency);
-
-            if (type === 'date') {
-                col.$valueGroup.addClass('jts-date-group');
-                col.$datePickerBtn = $('<button type="button" class="btn btn-outline-secondary jts-date-picker-btn"></button>')
-                    .attr('aria-label', L.datePicker)
-                    .html('<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg>')
-                    .appendTo(col.$valueGroup);
-                col.$picker = $('<input type="date" class="jts-date-picker" tabindex="-1" aria-hidden="true">')
-                    .css({ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '1px', padding: 0, border: 0, opacity: 0, pointerEvents: 'none' })
-                    .appendTo(col.$valueGroup);
+            col.conds.push(self._buildCond(col, 0, $box));
+            if (col.showLogic) {
+                col.$logic = self._buildLogic(col, $box);
+                col.conds.push(self._buildCond(col, 1, $box));
             }
 
             if (sortable) {
@@ -370,10 +352,113 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
                 $popup.children('.p-3').removeClass('border-bottom');
             }
 
-            col.$popup = $popup; col.$select = $select; col.$input = $input; col.$clear = $clear;
+            // first condition is also exposed on the column (used by older code paths)
+            var c0 = col.conds[0];
+            col.$select = c0.$select; col.$input = c0.$input; col.$clear = c0.$clear;
+            col.$valueGroup = c0.$valueGroup; col.$picker = c0.$picker; col.$opIcon = c0.$opIcon;
+            col.$popup = $popup;
             $th.empty().append($content, $popup);
             self.cols.push(col);
         });
+    };
+
+    // Builds one condition (operator select + value input) and appends it to the popup box.
+    proto._buildCond = function (col, n, $box) {
+        var self = this, L = this.opts.labels, type = col.type, currency = col.currency, headerText = col.headerText;
+        var $select = $('<select class="form-select jts-select"></select>').attr('aria-label', L.filter + ' operator');
+        $.each(OPERATORS[type], function (_, op) {
+            var $opt = $('<option></option>').val(op).text(self._opLabel(type, op));
+            var style = self._opIconStyle(op);
+            if (style) $opt.attr('style', style);
+            $select.append($opt);
+        });
+
+        (function paint() {
+            var first = $select[0].options[$select[0].selectedIndex];
+            if (first) $select[0].style.backgroundImage = first.style.backgroundImage || '';
+        })();
+
+        var $input = $('<input class="form-control jts-input" placeholder="">')
+            .attr({ type: 'text', autocomplete: 'off', 'aria-label': headerText + ' ' + L.filter + (n ? ' 2' : '') });
+        if (type === 'numeric') $input.attr('inputmode', 'decimal');
+        if (type === 'date') $input.attr('placeholder', self.displayDateFormat);
+
+        var $clear = $('<span class="jts-clear-btn" role="button" tabindex="0"></span>')
+            .attr({ title: L.clear, 'aria-label': L.clear }).html(ICONS.close);
+
+        var $opGroup = $('<div class="input-group input-group-sm mb-2"><span class="input-group-text jts-input-group-text jts-op-icon">' + ICONS.equal + '</span></div>')
+            .attr('data-cond', n).toggleClass('jts-logic-extra d-none', n > 0).appendTo($box).append($select);
+        var $valueGroup = $('<div class="input-group input-group-sm position-relative jts-value-group"><span class="input-group-text jts-input-group-text">' + ICONS.search + '</span></div>')
+            .attr('data-cond', n).toggleClass('jts-logic-extra d-none', n > 0).appendTo($box).append($input, $clear);
+
+        var cond = {
+            index: n, type: type, $select: $select, $input: $input, $clear: $clear,
+            $valueGroup: $valueGroup, $opIcon: $opGroup.find('.jts-op-icon'), $picker: $(), $datePickerBtn: $()
+        };
+        cond.$opIcon.html(self._opIconHtml($select.val()));
+
+        if (currency) $valueGroup.children('.input-group-text').empty().text(currency).attr('title', currency);
+
+        if (type === 'date') {
+            $valueGroup.addClass('jts-date-group');
+            cond.$datePickerBtn = $('<button type="button" class="btn btn-outline-secondary jts-date-picker-btn"></button>')
+                .attr('aria-label', L.datePicker)
+                .html('<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg>')
+                .appendTo($valueGroup);
+            cond.$picker = $('<input type="date" class="jts-date-picker" tabindex="-1" aria-hidden="true">')
+                .css({ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '1px', padding: 0, border: 0, opacity: 0, pointerEvents: 'none' })
+                .appendTo($valueGroup);
+        }
+        return cond;
+    };
+
+    proto._defaultLogic = function () {
+        return String(this.opts.defaultLogic).toLowerCase() === 'or' ? 'or' : 'and';
+    };
+
+    // AND / OR radio pair between the two conditions of a column.
+    proto._buildLogic = function (col, $box) {
+        var L = this.opts.labels, def = this._defaultLogic();
+        var name = 'jts-logic-' + this.ns.replace(/\W/g, '') + '-' + col.index;
+        var $row = $('<div class="jts-logic jts-logic-extra mb-1 mt-1 text-center d-none" role="radiogroup"></div>').attr('aria-label', L.logic).appendTo($box);
+        $.each(['and', 'or'], function (_, v) {
+            var id = name + '-' + v;
+            var $d = $('<div class="form-check form-check-inline"></div>').appendTo($row);
+            if (v === 'or') $d.css('margin-right', 0); // keeps the pair optically centered
+            $('<input class="form-check-input jts-logic-radio" type="radio">')
+                .attr({ name: name, id: id, value: v }).prop('checked', v === def).appendTo($d);
+            $('<label class="form-check-label"></label>').attr('for', id).text(L[v] || v.toUpperCase()).appendTo($d);
+        });
+        return $row;
+    };
+
+    // Reveals the AND/OR radios and 2nd condition once the 1st condition (or the 2nd) is in use.
+    proto._condActive = function (cond) {
+        var op = cond.$select.val();
+        return $.trim(cond.$input.val()) !== '' || op === 'empty' || op === 'not_empty';
+    };
+
+    proto._updateLogicVisibility = function (col) {
+        if (!col.showLogic || !col.conds || col.conds.length < 2) return;
+        var show = this._condActive(col.conds[0]) || this._condActive(col.conds[1]);
+        col.$popup.find('.jts-logic-extra').toggleClass('d-none', !show);
+    };
+
+    proto._logicOf = function (col) {
+        var v = col.$logic && col.$logic.find('input:checked').val();
+        return v === 'or' ? 'or' : (v === 'and' ? 'and' : this._defaultLogic());
+    };
+
+    proto._setLogic = function (col, v) {
+        if (col.$logic) col.$logic.find('input[value="' + v + '"]').prop('checked', true);
+    };
+
+    // Resolves {col, cond} for an element inside a popup.
+    proto._ctx = function (el) {
+        var col = this._colOf(el); if (!col || !col.conds) return null;
+        var n = +$(el).closest('[data-cond]').attr('data-cond') || 0;
+        var cond = col.conds[n];
+        return cond ? { col: col, cond: cond } : null;
     };
 
     proto._colOf = function (el) {
@@ -408,53 +493,61 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         });
 
         $t.on('input' + ns + ' change' + ns, '.jts-input', function () {
-            var col = self._colOf(this); if (!col) return;
-            self._updateClearIcon(col);
-            if (col.type === 'date') self._syncPicker(col);
+            var x = self._ctx(this); if (!x) return;
+            self._updateClearIcon(x.cond);
+            self._updateLogicVisibility(x.col);
+            if (x.cond.type === 'date') self._syncPicker(x.cond);
             clearTimeout(self.timer);
             self.timer = setTimeout(function () { self.applyFilters(); }, self.opts.debounceTime);
         });
 
         // Keep typing in the date field uninterrupted; open the native calendar on explicit request.
         $t.on('click' + ns, '.jts-date-picker-btn', function () {
-            var col = self._colOf(this);
-            if (col && col.type === 'date') self._openPicker(col);
+            var x = self._ctx(this);
+            if (x && x.cond.type === 'date') self._openPicker(x.cond);
         });
 
         // A day picked in the calendar is written into the text field using dateFormat
         $t.on('change' + ns, '.jts-date-picker', function () {
-            var col = self._colOf(this); if (!col) return;
+            var x = self._ctx(this); if (!x) return;
             var ts = parseDate(this.value, 'dmy'); // native value is always YYYY-MM-DD
-            col.$input.val(isNaN(ts) ? '' : formatDate(ts, self.displayDateFormat));
-            self._updateClearIcon(col);
+            x.cond.$input.val(isNaN(ts) ? '' : formatDate(ts, self.displayDateFormat));
+            self._updateClearIcon(x.cond);
             clearTimeout(self.timer);
             self.applyFilters();
         });
 
         $t.on('change' + ns, '.jts-select', function () {
-            var col = self._colOf(this); if (!col) return;
+            var x = self._ctx(this); if (!x) return;
             var opt = this.options[this.selectedIndex];
             if (opt) this.style.backgroundImage = opt.style.backgroundImage || '';
-            if (col.$opIcon && col.$opIcon.length) col.$opIcon.html(self._opIconHtml(this.value));
-            self._updateValueVisibility(col);
+            if (x.cond.$opIcon.length) x.cond.$opIcon.html(self._opIconHtml(this.value));
+            self._updateValueVisibility(x.cond);
+            self._updateLogicVisibility(x.col);
             clearTimeout(self.timer);
             self.applyFilters();
         });
 
         $t.on('keyup' + ns, '.jts-select', function () {
-            var col = self._colOf(this); if (!col) return;
-            if (col.$opIcon && col.$opIcon.length) col.$opIcon.html(self._opIconHtml(this.value));
+            var x = self._ctx(this); if (!x) return;
+            if (x.cond.$opIcon.length) x.cond.$opIcon.html(self._opIconHtml(this.value));
         });
 
         $t.on('click' + ns, '.jts-clear-btn', function (e) {
             e.preventDefault();
-            var col = self._colOf(this); if (!col) return;
-            col.$input.val('');
-            col.$picker.val('');
-            self._updateClearIcon(col);
+            var x = self._ctx(this); if (!x) return;
+            x.cond.$input.val('');
+            x.cond.$picker.val('');
+            self._updateClearIcon(x.cond);
             clearTimeout(self.timer);
             self.applyFilters();
-            if (col.type !== 'date') col.$input.trigger('focus');
+            if (x.cond.type !== 'date') x.cond.$input.trigger('focus');
+        });
+
+        // AND / OR radios
+        $t.on('change' + ns, '.jts-logic-radio', function () {
+            clearTimeout(self.timer);
+            self.applyFilters();
         });
 
         // Keyboard activation for the span "buttons"
@@ -632,9 +725,23 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     // ---------------------------------------------------------------- filtering
 
+    // Combined predicate of a column: its 1st and 2nd condition joined by the AND / OR radio.
     proto._predicate = function (col) {
         if (!col.filterable) return null;
-        var op = col.$select.val(), raw = $.trim(col.$input.val());
+        var preds = [];
+        for (var i = 0; i < col.conds.length; i++) {
+            var fn = this._condPredicate(col, col.conds[i]);
+            if (fn) preds.push(fn);
+        }
+        if (!preds.length) return null;
+        if (preds.length === 1) return preds[0];
+        var p0 = preds[0], p1 = preds[1];
+        if (this._logicOf(col) === 'or') return function (k) { return p0(k) || p1(k); };
+        return function (k) { return p0(k) && p1(k); };
+    };
+
+    proto._condPredicate = function (col, cond) {
+        var op = cond.$select.val(), raw = $.trim(cond.$input.val());
         if (op === 'empty') return function (k) { return k.text === ''; };
         if (op === 'not_empty') return function (k) { return k.text !== ''; };
         if (!raw) return null;
@@ -660,19 +767,40 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         return null;
     };
 
+    // Visible "this column is filtered" indicator: filled funnel icon in the accent colour (inline styles,
+    // so it works without extra CSS), plus a class on the <th> for custom styling.
+    proto._markFiltered = function (col, active) {
+        if (!col.$filterBtn.length || col.filtered === active) return;
+        col.filtered = active;
+        col.$filterBtn.html(active ? ICONS.filterActive : ICONS.bars)
+            // .css('color', active ? 'var(--bs-primary, #0d6efd)' : '')
+            .attr('title', active ? this.opts.labels.filtered : this.opts.labels.filter);
+        col.$th.toggleClass('jts-col-filtered', active);
+    };
+
     proto.applyFilters = function () {
         var preds = [], i, j;
         for (i = 0; i < this.cols.length; i++) {
             var col = this.cols[i], fn = this._predicate(col);
             col.$filterBtn.toggleClass('jts-filter-active', !!fn);
+            this._markFiltered(col, !!fn);
+            this._updateLogicVisibility(col);
             if (fn) preds.push({ ci: i, fn: fn });
         }
 
         var visible = 0, rows = this.rows;
+        var orCols = String(this.opts.columnLogic).toLowerCase() === 'or';
         for (i = 0; i < rows.length; i++) {
             var row = rows[i], show = true;
-            for (j = 0; j < preds.length; j++) {
-                if (!preds[j].fn(this._key(row, preds[j].ci))) { show = false; break; }
+            if (preds.length && orCols) {
+                show = false;
+                for (j = 0; j < preds.length; j++) {
+                    if (preds[j].fn(this._key(row, preds[j].ci))) { show = true; break; }
+                }
+            } else {
+                for (j = 0; j < preds.length; j++) {
+                    if (!preds[j].fn(this._key(row, preds[j].ci))) { show = false; break; }
+                }
             }
             if (row.vis !== show) { row.el.style.display = show ? '' : 'none'; row.vis = show; }
             if (show) visible++;
@@ -688,18 +816,18 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         var self = this;
         $.each(this.cols, function (_, c) {
             if (!c.filterable) return;
-            c.$select.prop('selectedIndex', 0);
-            c.$input.val('');
-            c.$picker.val('');
-            var first = c.$select[0].options[0];
-            c.$select[0].style.backgroundImage = first ? (first.style.backgroundImage || '') : '';
-            if (c.$opIcon && c.$opIcon.length) c.$opIcon.html(self._opIconHtml(c.$select.val()));
+            $.each(c.conds, function (_, k) {
+                k.$select.prop('selectedIndex', 0);
+                k.$input.val('');
+                k.$picker.val('');
+                var first = k.$select[0].options[0];
+                k.$select[0].style.backgroundImage = first ? (first.style.backgroundImage || '') : '';
+                if (k.$opIcon.length) k.$opIcon.html(self._opIconHtml(k.$select.val()));
+                self._updateClearIcon(k);
+                self._updateValueVisibility(k);
+            });
+            self._setLogic(c, self._defaultLogic());
         });
-        for (var i = 0; i < this.cols.length; i++) {
-            if (!this.cols[i].filterable) continue;
-            this._updateClearIcon(this.cols[i]);
-            this._updateValueVisibility(this.cols[i]);
-        }
         clearTimeout(this.timer);
         return this.applyFilters();
     };
@@ -770,8 +898,15 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         return {
             filters: $.map(this.cols, function (c) {
                 if (!c.filterable) return null;
-                var v = $.trim(c.$input.val()), op = c.$select.val();
-                return (v || op === 'empty' || op === 'not_empty') ? { column: c.index, operator: op, value: v } : null;
+                var act = [];
+                $.each(c.conds, function (_, k) {
+                    var v = $.trim(k.$input.val()), op = k.$select.val();
+                    if (v || op === 'empty' || op === 'not_empty') act.push({ operator: op, value: v });
+                });
+                if (!act.length) return null;
+                var f = { column: c.index, operator: act[0].operator, value: act[0].value };
+                if (act.length > 1) { f.logic = self._logicOf(c); f.operator2 = act[1].operator; f.value2 = act[1].value; }
+                return f;
             }),
             sort: { column: this.sort.col, direction: this.sort.dir },
             visibleRows: $.grep(self.rows, function (r) { return r.vis; }).length,
