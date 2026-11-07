@@ -184,3 +184,60 @@
 @media (prefers-reduced-motion: reduce) {
     .jts-icon-btn { transition: none; }
 }
+
+/* ---- Server mode: loading indicator, empty / error rows ----------------- */
+.jts-scroll {
+    position: relative;                /* anchors the loading overlay */
+}
+
+.jts-table.jts-loading tbody {
+    opacity: .45;
+    transition: opacity .15s;
+}
+
+.jts-loading-overlay {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 5;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    pointer-events: none;              /* headers stay usable while loading */
+    color: var(--jts-ink);
+    font-size: .9rem;
+}
+
+.jts-scroll.jts-loading > .jts-loading-overlay {
+    display: flex;
+}
+
+.jts-spinner {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--jts-line-strong);
+    border-top-color: var(--jts-ink);
+    border-radius: 50%;
+    animation: jts-spin .7s linear infinite;
+}
+
+@keyframes jts-spin {
+    to { transform: rotate(360deg); }
+}
+
+.jts-msg-row:hover > td {
+    background: transparent;
+}
+
+.jts-retry {
+    color: var(--jts-ink);
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jts-spinner { animation-duration: 2.5s; }
+    .jts-table.jts-loading tbody { transition: none; }
+}

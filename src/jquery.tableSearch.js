@@ -22,6 +22,15 @@
  * Optional per-cell override for sorting/filtering: <td data-sort-value="...">.
  *
  * Events on the table: "tablesearch:filter" ({visible,total}), "tablesearch:sort" ({column,direction}).
+ *
+ * Server mode (option processing: 'server'; default is 'client'):
+ *   $('#t').tableSearch({ processing: 'server', pageSize: 25,
+ *       ajax: { url: '/api/people', method: 'POST' },          // sends page, pageSize, sort, filters, columnLogic
+ *       responseMap: { rows: 'data', total: 'total' } });      // or a function (json) -> { rows, total }
+ *   Map columns to row fields with <th data-field="name"> (dot paths allowed) or give a renderRow(row, i) -> <tr>.
+ *   Extra methods: .tableSearch('page', 2), .tableSearch('page'), .tableSearch('pageSize', 50), .tableSearch('reload'), .tableSearch('abort').
+ *   Extra events: "tablesearch:request" (request), "tablesearch:load" ({rows,total,page,pageSize,pages,response}),
+ *   "tablesearch:error" ({status,error,xhr}). "tablesearch:filter" fires after each load with {visible: rows on page, total: matching rows}.
  */
 (function (factory) {
     if (typeof define === 'function' && define.amd) {
@@ -110,6 +119,26 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         responsive: true,              // viewport-aware popups (fixed, clamped to the screen; bottom sheet on small screens)
         responsiveWrap: true,          // wrap the table in a horizontally scrollable .jts-scroll div (skipped inside .table-responsive / .jts-scroll)
         mobileSheet: false,            // true = popups become a bottom sheet on small screens; false = popup stays anchored to the header
+        processing: 'client',          // 'client' (default: filter/sort the DOM rows) | 'server' (rows come from the server via AJAX)
+        pageSize: 10,                  // server mode: rows per page (sent as request.pageSize)
+        initialLoad: true,             // server mode: fetch the first page on init (false = keep the rows already in the table)
+        requestDebounce: 100,          // server mode: ms used to merge rapid filter/sort changes into one request
+        ajax: {                        // server mode request settings
+            url: null,                 // string, or function (request) -> string (required in server mode)
+            method: 'POST',            // 'GET' | 'POST' | ...
+            contentType: 'json',       // 'json' (JSON body) | 'form' (urlencoded); GET always uses the query string
+            dataType: 'json',
+            headers: null,             // e.g. { 'X-CSRF-Token': '...' }
+            timeout: 0,                // ms, 0 = none
+            cache: false,
+            data: null,                // object (merged into the request) or function (request, plugin) -> object that replaces it
+            settings: null,            // extra $.ajax settings (xhrFields, beforeSend, ...)
+            paramNames: { page: 'page', pageSize: 'pageSize', sort: 'sort', filters: 'filters', columnLogic: 'columnLogic' }
+        },
+        responseMap: { rows: 'data', total: 'total' },   // dot paths into the JSON, or function (json) -> { rows, total }
+        renderRow: null,               // server mode: function (row, index) -> <tr> element / jQuery / HTML string (default: built from th data-field)
+        onLoad: null,                  // function (info) {}  server mode
+        onError: null,                 // function (info) {}  server mode
         mobileBreakpoint: 575,         // px; viewport width at or below which the bottom sheet is used (only when mobileSheet is true)
         labels: {
             sort: 'Sort',
@@ -123,6 +152,10 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             and: 'AND',
             or: 'OR',
             logic: 'Logical operator',
+            loading: 'Loading...',
+            noData: 'No records found',
+            error: 'Could not load data.',
+            retry: 'Retry',
             operators: {
                 contains: 'Contains', not_contains: 'Does not contain',
                 eq: 'Equals', neq: 'Does not equal',
@@ -257,12 +290,28 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         this.$backdrop = null;
         this.wrapped = false;
         this._onScroll = null;
+        // server mode state
+        if (options.processing === 'server' && !(options.ajax && options.ajax.url)) {
+            throw new Error('tableSearch: processing "server" requires ajax.url');
+        }
+        this._page = 1;
+        this._pageSize = options.pageSize;
+        this._total = 0;
+        this.xhr = null;
+        this.reqId = 0;
+        this.reqTimer = null;
+        this._lastSig = null;      // signature of the last request sent (duplicate prevention)
+        this._fsig = null;         // signature of the filters last applied (page resets to 1 only when they change)
+        this.loading = false;
+        this._hold = true;         // no requests while initialising
 
         this._setupResponsive();
         this._build();
         this._bind();
         this.refresh();
         this._applyDefaultSort();
+        this._hold = false;
+        if (this._server() && options.initialLoad) this._queue(true);
     }
 
     var proto = TableSearch.prototype;
@@ -361,7 +410,7 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             var sortable = dSort === undefined ? !!self.opts.showSortIcon : !!dSort;
             var filterable = dFilter === undefined ? !!self.opts.showFilterIcon : !!dFilter;
             var col = {
-                index: index, type: type, currency: currency, $th: $th, origHtml: $th.html(), headerText: headerText,
+                index: index, type: type, currency: currency, field: $th.attr('data-field') || null, $th: $th, origHtml: $th.html(), headerText: headerText,
                 sortable: sortable, filterable: filterable,
                 $sortBtn: $(), $filterBtn: $(), $popup: $(), $select: $(), $input: $(), $clear: $(),
                 $valueGroup: $(), $picker: $(), $opIcon: $()
@@ -620,6 +669,12 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); }
         });
 
+        // Retry link in the error row (server mode)
+        $t.on('click' + ns, '.jts-retry', function (e) {
+            e.preventDefault();
+            self.reload();
+        });
+
         // Escape closes the popup and returns focus to its trigger
         $t.on('keydown' + ns, function (e) {
             if (e.key === 'Escape' && self.openCol > -1) {
@@ -734,13 +789,16 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     // ---------------------------------------------------------------- data
 
-    proto.refresh = function () {
+    // Maps the table body rows to internal row records (message rows of server mode are ignored).
+    proto._syncRows = function () {
         var tbody = this.table.tBodies[0];
         var trs = tbody ? tbody.rows : [];
         var old = this.rowMap, map = new Map(), rows = [];
 
         for (var i = 0; i < trs.length; i++) {
-            var tr = trs[i], r = old.get(tr);
+            var tr = trs[i];
+            if (tr.className.indexOf('jts-msg-row') > -1) continue;
+            var r = old.get(tr);
             if (!r) r = { el: tr, idx: this.nextIdx++, cache: [], vis: tr.style.display !== 'none' };
             else r.cache = [];
             map.set(tr, r);
@@ -748,7 +806,19 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         }
         this.rowMap = map;
         this.rows = rows;
+    };
 
+    proto.refresh = function () {
+        if (this._server()) {
+            if (this._hold) {                       // during init: adopt the rows already in the table
+                this._syncRows();
+                this._formatCurrencyCells();
+                this._total = this.rows.length;
+                return this;
+            }
+            return this.reload();                   // later: fetch the current page again
+        }
+        this._syncRows();
         this._formatCurrencyCells();
         this._checkDateColumns();
         this.applyFilters();
@@ -886,6 +956,13 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             if (fn) preds.push({ ci: i, fn: fn });
         }
 
+        if (this._server()) {                       // server mode: the server does the filtering
+            var fs = JSON.stringify(this._serverFilters());
+            if (fs !== this._fsig) { this._fsig = fs; this._page = 1; }
+            this._queue();
+            return this;
+        }
+
         var visible = 0, rows = this.rows;
         var orCols = String(this.opts.columnLogic).toLowerCase() === 'or';
         for (i = 0; i < rows.length; i++) {
@@ -949,12 +1026,14 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             $active.find('.jts-sort-check').css('display', 'inline-flex');
         }
         this._applySort();
+        if (this._server()) { this._page = 1; this._queue(); }
         var info = { column: ci, direction: dir };
         this.$table.trigger('tablesearch:sort', [info]);
         if (typeof this.opts.onSort === 'function') this.opts.onSort.call(this.table, info);
     };
 
     proto._applySort = function () {
+        if (this._server()) return;                 // server mode: the server returns the rows already sorted
         var tbody = this.table.tBodies[0];
         if (!tbody) return;
         var ci = this.sort.col, rows = this.rows.slice(), self = this;
@@ -989,11 +1068,268 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     proto.clearSort = function () { this._setSort(-1, null); return this; };
 
+    // ---------------------------------------------------------------- server mode
+
+    function pick(obj, path) {
+        if (obj == null || path == null || path === '') return undefined;
+        var p = String(path).split('.');
+        for (var i = 0; i < p.length; i++) { if (obj == null) return undefined; obj = obj[p[i]]; }
+        return obj;
+    }
+
+    proto._server = function () { return this.opts.processing === 'server'; };
+
+    proto._pages = function () {
+        return this._total > 0 ? Math.max(1, Math.ceil(this._total / this._pageSize)) : 1;
+    };
+
+    // Filters as a structured list: one entry per column with 1-2 conditions and the AND/OR joining them.
+    proto._serverFilters = function () {
+        var out = [], self = this, o = this.opts;
+        $.each(this.cols, function (_, c) {
+            if (!c.filterable || !c.conds) return;
+            var conds = [];
+            $.each(c.conds, function (_, k) {
+                var op = k.$select.val(), raw = $.trim(k.$input.val()), v;
+                if (op === 'empty' || op === 'not_empty') { conds.push({ operator: op, value: null }); return; }
+                if (!raw) return;
+                if (c.type === 'numeric') { v = parseNumber(raw, o.decimalSeparator, o.numericRegex); if (v !== v) return; }
+                else if (c.type === 'date') { var t = self._parseSearchDate(raw); if (t !== t) return; v = new Date(t).toISOString().slice(0, 10); }
+                else v = raw;
+                conds.push({ operator: op, value: v });
+            });
+            if (!conds.length) return;
+            out.push({ column: c.index, field: c.field, type: c.type, logic: conds.length > 1 ? self._logicOf(c) : 'and', conditions: conds });
+        });
+        return out;
+    };
+
+    proto._buildRequest = function () {
+        var c = this.sort.col > -1 ? this.cols[this.sort.col] : null;
+        return {
+            page: this._page,
+            pageSize: this._pageSize,
+            sort: c ? { column: c.index, field: c.field, direction: this.sort.dir } : null,
+            columnLogic: String(this.opts.columnLogic).toLowerCase() === 'or' ? 'or' : 'and',
+            filters: this._serverFilters()
+        };
+    };
+
+    // Applies ajax.paramNames and ajax.data to the internal request.
+    proto._shape = function (req, asJson) {
+        var cfg = this.opts.ajax, pn = cfg.paramNames || {}, out = {}, d = cfg.data;
+        out[pn.page || 'page'] = req.page;
+        out[pn.pageSize || 'pageSize'] = req.pageSize;
+        if (req.sort || asJson) out[pn.sort || 'sort'] = req.sort;
+        out[pn.columnLogic || 'columnLogic'] = req.columnLogic;
+        out[pn.filters || 'filters'] = req.filters;
+        if (typeof d === 'function') { var r = d.call(this.table, out, this); if (r && typeof r === 'object') out = r; }
+        else if (d && typeof d === 'object') out = $.extend({}, out, d);
+        return out;
+    };
+
+    // Schedules a request. Rapid calls are merged (requestDebounce); now = true sends immediately.
+    proto._queue = function (now) {
+        if (this._hold || !this._server()) return;
+        var self = this;
+        clearTimeout(this.reqTimer);
+        var run = function () { self.reqTimer = null; self._send(); };
+        if (now || !this.opts.requestDebounce) { this.reqTimer = null; run(); }
+        else this.reqTimer = setTimeout(run, this.opts.requestDebounce);
+    };
+
+    proto._send = function () {
+        var self = this, cfg = this.opts.ajax, req = this._buildRequest(), sig = JSON.stringify(req);
+        if (sig === this._lastSig) return;                       // identical to the request already sent / loaded
+        this._lastSig = sig;
+
+        var id = ++this.reqId;                                   // bump first: the aborted request's callbacks become stale
+        if (this.xhr) { var old = this.xhr; this.xhr = null; old.abort(); }
+
+        var method = String(cfg.method || 'POST').toUpperCase();
+        var asJson = method !== 'GET' && String(cfg.contentType).toLowerCase() !== 'form';
+        var payload = this._shape(req, asJson);
+        var settings = $.extend({}, cfg.settings, {
+            url: typeof cfg.url === 'function' ? cfg.url(req) : cfg.url,
+            type: method,
+            dataType: cfg.dataType || 'json',
+            headers: cfg.headers || undefined,
+            timeout: cfg.timeout || 0,
+            cache: !!cfg.cache,
+            data: asJson ? JSON.stringify(payload) : payload
+        });
+        if (asJson) settings.contentType = 'application/json; charset=utf-8';
+
+        this._setLoading(true);
+        this.$table.trigger('tablesearch:request', [req]);
+
+        var xhr = this.xhr = $.ajax(settings);
+        xhr.done(function (json) {
+            if (id !== self.reqId) return;
+            self.xhr = null;
+            self._onLoad(json, xhr);
+            self._setLoading(false);
+        }).fail(function (jq, status, err) {
+            if (id !== self.reqId || status === 'abort') return;
+            self.xhr = null;
+            self._lastSig = null;                                // allow an identical retry
+            self._onError(jq, status, err);
+            self._setLoading(false);
+        });
+    };
+
+    proto._mapResponse = function (json) {
+        var m = this.opts.responseMap, r;
+        if (typeof m === 'function') r = m.call(this.table, json, this) || {};
+        else r = { rows: pick(json, m && m.rows), total: pick(json, m && m.total) };
+        if (r.rows === undefined && $.isArray(json)) r.rows = json;   // bare array response
+        return r;
+    };
+
+    proto._onLoad = function (json, xhr) {
+        var rows, total, nodes = [], i;
+        try {
+            var m = this._mapResponse(json);
+            rows = m.rows;
+            if (!$.isArray(rows)) throw new Error('tableSearch: response has no rows array (check responseMap)');
+            for (i = 0; i < rows.length; i++) nodes.push(this._toRow(rows[i], i));
+            total = m.total == null ? NaN : +m.total;
+            if (total !== total) total = (this._page - 1) * this._pageSize + rows.length;
+            if (!nodes.length) nodes.push(this._msgRow(this.opts.labels.noData, 'jts-empty-row'));
+            this._total = total;
+            this._setBody(nodes);
+        } catch (e) {
+            this._onError(xhr, 'parsererror', e.message);
+            return;
+        }
+        var info = { rows: rows.length, total: total, page: this._page, pageSize: this._pageSize, pages: this._pages(), response: json };
+        this.$table.trigger('tablesearch:load', [info]);
+        if (typeof this.opts.onLoad === 'function') this.opts.onLoad.call(this.table, info);
+        var fi = { visible: rows.length, total: total };
+        this.$table.trigger('tablesearch:filter', [fi]);
+        if (typeof this.opts.onFilter === 'function') this.opts.onFilter.call(this.table, fi);
+    };
+
+    proto._onError = function (xhr, status, err) {
+        this._lastSig = null;
+        this._total = 0;
+        this._setBody([this._msgRow(this.opts.labels.error, 'jts-error-row', true)]);
+        var info = { status: status, error: err, xhr: xhr };
+        this.$table.trigger('tablesearch:error', [info]);
+        if (typeof this.opts.onError === 'function') this.opts.onError.call(this.table, info);
+    };
+
+    proto._defaultRow = function (row) {
+        var tr = document.createElement('tr');
+        for (var i = 0; i < this.cols.length; i++) {
+            var f = this.cols[i].field;
+            var v = $.isArray(row) ? row[i] : (f ? pick(row, f) : undefined);
+            var td = document.createElement('td');
+            td.textContent = v == null ? '' : String(v);
+            tr.appendChild(td);
+        }
+        return tr;
+    };
+
+    proto._toRow = function (row, i) {
+        var out = typeof this.opts.renderRow === 'function' ? this.opts.renderRow.call(this.table, row, i, this) : this._defaultRow(row, i);
+        if (typeof out === 'string') out = $('<tbody></tbody>').html(out).children('tr')[0];
+        else if (out && out.jquery) out = out[0];
+        if (!out || out.nodeType !== 1) throw new Error('tableSearch: renderRow must return a <tr>');
+        return out;
+    };
+
+    proto._msgRow = function (text, cls, retry) {
+        var tr = document.createElement('tr'), td = document.createElement('td');
+        tr.className = 'jts-msg-row ' + cls;
+        td.colSpan = Math.max(1, this.cols.length);
+        td.className = 'jts-msg-cell text-center text-muted py-4';
+        td.textContent = text;
+        if (retry) {
+            var a = document.createElement('a');
+            a.href = '#'; a.className = 'jts-retry'; a.textContent = this.opts.labels.retry;
+            td.appendChild(document.createTextNode(' '));
+            td.appendChild(a);
+        }
+        tr.appendChild(td);
+        return tr;
+    };
+
+    proto._setBody = function (nodes) {
+        var tb = this.table.tBodies[0] || this.table.appendChild(document.createElement('tbody'));
+        var frag = document.createDocumentFragment();
+        for (var i = 0; i < nodes.length; i++) frag.appendChild(nodes[i]);
+        $(tb).empty();
+        tb.appendChild(frag);
+        this._syncRows();
+        this._formatCurrencyCells();
+    };
+
+    proto._setLoading = function (on) {
+        this.loading = !!on;
+        var $w = this.$table.parent('.jts-scroll');
+        this.$table.toggleClass('jts-loading', this.loading);
+        if (this.loading) this.$table.attr('aria-busy', 'true'); else this.$table.removeAttr('aria-busy');
+        if ($w.length) {
+            if (!this.$overlay) {
+                this.$overlay = $('<div class="jts-loading-overlay" role="status" aria-live="polite"><span class="jts-spinner" aria-hidden="true"></span><span class="jts-loading-text"></span></div>');
+                this.$overlay.find('.jts-loading-text').text(this.opts.labels.loading);
+                $w.append(this.$overlay);
+            }
+            $w.toggleClass('jts-loading', this.loading);
+        }
+    };
+
+    proto._removeOverlay = function () {
+        if (this.$overlay) { this.$overlay.remove(); this.$overlay = null; }
+        this.$table.parent('.jts-scroll').removeClass('jts-loading');
+        this.$table.removeClass('jts-loading').removeAttr('aria-busy');
+    };
+
+    // ---- public (server mode); harmless in client mode
+
+    proto.page = function (n) {
+        if (n === undefined) return this._server() ? this._page : 1;
+        if (!this._server()) return this;
+        n = Math.max(1, parseInt(n, 10) || 1);
+        if (this._total > 0) n = Math.min(n, this._pages());
+        this._page = n;
+        this._queue(true);
+        return this;
+    };
+
+    proto.pageSize = function (n) {
+        if (n === undefined) return this._pageSize;
+        n = Math.max(1, parseInt(n, 10) || this._pageSize);
+        this._pageSize = n;
+        if (this._server()) { this._page = 1; this._queue(true); }
+        return this;
+    };
+
+    // Server mode: fetch the current page again (even if nothing changed). Client mode: same as refresh().
+    proto.reload = function () {
+        if (!this._server()) return this.refresh();
+        this._lastSig = null;
+        this._queue(true);
+        return this;
+    };
+
+    // Cancels a pending / running request.
+    proto.abort = function () {
+        clearTimeout(this.reqTimer);
+        this.reqTimer = null;
+        this.reqId++;
+        if (this.xhr) { var x = this.xhr; this.xhr = null; x.abort(); }
+        this._lastSig = null;
+        if (this.loading) this._setLoading(false);
+        return this;
+    };
+
     // ---------------------------------------------------------------- state / teardown
 
     proto.getState = function () {
         var self = this;
-        return {
+        var st = {
             filters: $.map(this.cols, function (c) {
                 if (!c.filterable) return null;
                 var act = [];
@@ -1008,12 +1344,20 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             }),
             sort: { column: this.sort.col, direction: this.sort.dir },
             visibleRows: $.grep(self.rows, function (r) { return r.vis; }).length,
-            totalRows: self.rows.length
+            totalRows: self._server() ? self._total : self.rows.length,
+            processing: self.opts.processing
         };
+        if (self._server()) {
+            st.page = self._page; st.pageSize = self._pageSize; st.pages = self._pages(); st.loading = self.loading;
+        }
+        return st;
     };
 
     proto.destroy = function () {
         clearTimeout(this.timer);
+        this.abort();
+        $(this.table.tBodies[0]).children('.jts-msg-row').remove();
+        this._removeOverlay();
         this._unbindOpen();
         this._cancelPosition();
         this._hideBackdrop();
@@ -1072,17 +1416,18 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     // ---------------------------------------------------------------- plugin entry
 
-    var PUBLIC_METHODS = { refresh: 1, applyFilters: 1, clearFilters: 1, clearSort: 1, getState: 1, destroy: 1 };
+    var PUBLIC_METHODS = { refresh: 1, applyFilters: 1, clearFilters: 1, clearSort: 1, getState: 1, destroy: 1, page: 1, pageSize: 1, reload: 1, abort: 1 };
+    var GETTERS = { getState: 1, page: 1, pageSize: 1 };   // return a value (page / pageSize only when called without arguments)
 
     $.fn.tableSearch = function (arg) {
         if (typeof arg === 'string') {
             if (!PUBLIC_METHODS[arg]) throw new Error('tableSearch: unknown method "' + arg + '"');
-            var result;
+            var result, args = Array.prototype.slice.call(arguments, 1);
             this.each(function () {
                 var inst = $.data(this, DATA_KEY);
                 if (!inst) return;
-                var r = inst[arg]();
-                if (arg === 'getState' && result === undefined) result = r;
+                var r = inst[arg].apply(inst, args);
+                if (GETTERS[arg] && (arg === 'getState' || !args.length) && result === undefined) result = r;
             });
             return result === undefined ? this : result;
         }
@@ -1091,6 +1436,9 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         if (arg && arg.debounce !== undefined && arg.debounceTime === undefined) options.debounceTime = arg.debounce;
         options.numericRegex = toGlobalRegex(options.numericRegex);
         options.debounceTime = Math.max(0, +options.debounceTime || 0);
+        options.processing = String(options.processing).toLowerCase() === 'server' ? 'server' : 'client';
+        options.pageSize = Math.max(1, parseInt(options.pageSize, 10) || 10);
+        options.requestDebounce = Math.max(0, +options.requestDebounce || 0);
         return this.each(function () {
             if (this.tagName !== 'TABLE' || $.data(this, DATA_KEY)) return;
             $.data(this, DATA_KEY, new TableSearch(this, options));
