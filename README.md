@@ -173,6 +173,8 @@ Set these on the `<th>` elements.
 | `data-logic` | `true` / `false` | Overrides `showLogicOperator` for this column (second condition and AND / OR choice). |
 | `data-field` | property name, dot paths allowed (`user.name`) | Server mode: which property of each JSON row is shown in this column, and the `field` name sent to the server for sorting and filtering. |
 
+The same can be set from JavaScript with the `columns`, `disableSort` and `disableFilter` options. Configuration wins over the attributes, and the attributes win over `showSortIcon` / `showFilterIcon`.
+
 You can also set `data-sort-value` on a `<td>` to give the plugin a clean value to filter and sort by, regardless of what the cell displays (client mode).
 
 ## tableSearch options
@@ -195,6 +197,9 @@ $('#myTable').tableSearch({ /* options */ });
 | `showLogicOperator` | `false` | A second condition and AND / OR radios appear in the popup once the first field has a value. |
 | `defaultLogic` | `'and'` | Initially selected radio: `'and'` or `'or'`. |
 | `columnLogic` | `'and'` | How filters of different columns combine: `'and'` or `'or'`. |
+| `columns` | `null` | Per-column overrides by configuration: `{ 'Actions': { sortable: false, filterable: false }, 3: { filterable: false } }`. Keys are a 0-based index, the header text (case-insensitive) or the `data-field`. |
+| `disableSort` | `null` | Shortcut: array of columns without sorting, for example `['Actions', 4]`. |
+| `disableFilter` | `null` | Shortcut: array of columns without filtering, for example `['Actions', 'extn']`. |
 | `showNoData` | `true` | Client mode: show the "No records found" row when every row is filtered out. |
 | `onFilter` | `null` | `function (info)` called after filtering, with `{ visible, total }`. |
 | `onSort` | `null` | `function (info)` called after sorting, with `{ column, direction }`. |

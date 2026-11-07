@@ -34,11 +34,11 @@
         <thead class="table-light">
             <tr>
                 <th data-type="string" data-field="name">Name</th>
-                <th data-type="string" data-field="position" data-filterable="false">Position</th>
+                <th data-type="string" data-field="position">Position</th>
                 <th data-type="string" data-field="office">Office</th>
-                <th data-type="numeric" data-field="extn" data-sortable="false">Extn.</th>
-                <th data-type="date" data-field="start_date" >Start date</th>
-                <th data-currency data-field="salary" data-sortable="false" data-filterable="false">Salary</th>
+                <th data-type="numeric" data-field="extn">Extn.</th>
+                <th data-type="date" data-field="start_date">Start date</th>
+                <th data-currency data-field="salary">Salary</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -109,7 +109,10 @@
                 responsive: true,
                 responsiveWrap: true,
                 mobileSheet: true,
-                mobileBreakpoint: 575
+                mobileBreakpoint: 575,
+                disableSort: ['Position', 3, 'salary'],      // these columns cannot be sorted
+                disableFilter: ['Office', 'extn', 'salary'],   // these columns cannot be filtered
+
             };
 
             if (MODE === 'server') {
@@ -143,7 +146,7 @@
                 resetPageOnFilter: true,
                 resetPageOnSort: false
             });
-            
+
         });
     </script>
 

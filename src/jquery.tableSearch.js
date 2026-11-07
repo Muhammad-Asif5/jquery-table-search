@@ -14,6 +14,7 @@
  *   $('#myTable').tableSearch('destroy');
  *
  * Column types via <th data-type="string|numeric|date"> (default: string).
+ * Per-column override by configuration: columns / disableSort / disableFilter (index, header text or data-field).
  * Per-column override of the icon options: <th data-sortable="false"> / <th data-filterable="false">
  * (also works as "true" to enable on a column when the global option is off).
  * Currency columns: <th data-currency> (uses the global currencySymbol) or <th data-currency="Rs"> (own symbol).
@@ -123,6 +124,9 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         pageSize: 10,                  // server mode: rows per page (sent as request.pageSize)
         resetPageOnFilter: true,       // server mode: go back to page 1 when the filters change (tablePager overrides this)
         resetPageOnSort: true,         // server mode: go back to page 1 when the sort changes (tablePager overrides this)
+        columns: null,                 // per-column overrides: { 'Actions': { sortable: false, filterable: false }, 3: { filterable: false } }
+        disableSort: null,             // shortcut: columns without sorting, e.g. ['Actions', 4]
+        disableFilter: null,           // shortcut: columns without filtering, e.g. ['Actions', 'extn']
         showNoData: true,              // client mode: show the "No records found" row when every row is filtered out
         initialLoad: true,             // server mode: fetch the first page on init (false = keep the rows already in the table)
         requestDebounce: 100,          // server mode: ms used to merge rapid filter/sort changes into one request
@@ -394,6 +398,23 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         this.raf = null;
     };
 
+    // Per-column configuration. A column is matched by index (0-based), header text (case-insensitive) or data-field.
+    proto._colConfig = function (index, headerText, field) {
+        var o = this.opts, out = {};
+        var norm = function (v) { return String(v).toLowerCase().replace(/^\s+|\s+$/g, ''); };
+        var hit = function (key) {
+            if (typeof key === 'number' || /^\d+$/.test(String(key))) return +key === index;
+            var k = norm(key);
+            return k === norm(headerText) || (field && k === norm(field));
+        };
+        $.each(o.columns || {}, function (key, cfg) {
+            if (cfg && hit(key)) $.extend(out, { sortable: cfg.sortable, filterable: cfg.filterable });
+        });
+        $.each([].concat(o.disableSort || []), function (_, key) { if (hit(key)) out.sortable = false; });
+        $.each([].concat(o.disableFilter || []), function (_, key) { if (hit(key)) out.filterable = false; });
+        return out;
+    };
+
     proto._build = function () {
         var self = this, L = this.opts.labels;
         var $headRow = this.$table.children('thead').find('tr').last();
@@ -412,6 +433,10 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             var dSort = $th.data('sortable'), dFilter = $th.data('filterable');
             var sortable = dSort === undefined ? !!self.opts.showSortIcon : !!dSort;
             var filterable = dFilter === undefined ? !!self.opts.showFilterIcon : !!dFilter;
+            // Configuration wins over the data-* attributes: columns / disableSort / disableFilter
+            var cc = self._colConfig(index, headerText, $th.attr('data-field'));
+            if (cc.sortable !== undefined) sortable = !!cc.sortable;
+            if (cc.filterable !== undefined) filterable = !!cc.filterable;
             var col = {
                 index: index, type: type, currency: currency, field: $th.attr('data-field') || null, $th: $th, origHtml: $th.html(), headerText: headerText,
                 sortable: sortable, filterable: filterable,
