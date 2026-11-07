@@ -19,6 +19,11 @@
 
     <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
         <h4 class="mb-0">Click a header to sort, or the bars icon to filter</h4>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Data mode">
+            <a id="modeClient" class="btn btn-outline-primary" href="?mode=client">Client-side data</a>
+            <a id="modeServer" class="btn btn-outline-primary" href="?mode=server">Server-side data</a>
+        </div>
+        <span id="modeNote" class="small text-muted"></span>
     </div>
 
     <!--
@@ -38,6 +43,12 @@
         </thead>
         <tbody></tbody>
     </table>
+
+    <!-- Pagination is bound to these two spans: #pagger gets the controls, #pageInfo gets "Showing 1-5 of 57" -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+        <span id="pageInfo" class="small text-muted">dddd</span>
+        <span id="pagger">ddfff</span>
+    </div>
 
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -61,17 +72,21 @@
             //   'server' -> the server returns one filtered/sorted page per request
             // Demo: ?mode=server in the URL. In your app just hard-code it.
             // ----------------------------------------------------------------
-            var MODE = 'server' //'server' : 'client';
+            var MODE = new URLSearchParams(location.search).get('mode') === 'server' ? 'server' : 'client';
             var PAGE_SIZE = 5;
 
-            // if (MODE === 'client') {
-            //     debugger
-            //     var html = MockServer.rows.map(function (r) {
-            //         return '<tr><td>' + r.name + '</td><td>' + r.position + '</td><td>' + r.office + '</td><td>' +
-            //             r.extn + '</td><td>' + r.start_date + '</td><td>' + r.salary + '</td></tr>';
-            //     }).join('');
-            //     $('#myTable tbody').html(html);
-            // }
+            $(MODE === 'server' ? '#modeServer' : '#modeClient').addClass('active');
+            $('#modeNote').text(MODE === 'server'
+                ? 'Every filter / sort / page change sends ONE request to mock://employees (350 ms latency).'
+                : 'All 57 rows are in the DOM; filtering, sorting and paging run in the browser.');
+
+            if (MODE === 'client') {
+                var html = MockServer.rows.map(function (r) {
+                    return '<tr><td>' + r.name + '</td><td>' + r.position + '</td><td>' + r.office + '</td><td>' +
+                        r.extn + '</td><td>' + r.start_date + '</td><td>' + r.salary + '</td></tr>';
+                }).join('');
+                $('#myTable tbody').html(html);
+            }
 
             // ----------------------------------------------------------------
             // 1) Filter + sort
@@ -88,7 +103,7 @@
                 currencyFormatCells: true,
                 defaultSortColumn: 'Name',
                 defaultSortDirection: 'asc',
-                showLogicOperator: false,
+                showLogicOperator: true,
                 defaultLogic: 'and',
                 columnLogic: 'and',
                 responsive: true,
@@ -115,18 +130,20 @@
             $('#myTable').tablePager({
                 enabled: true,
                 processing: MODE,                       // 'client' | 'server' | 'auto'
+                pager: '#pagger',                       // container for the controls
+                info: '#pageInfo',                      // container for the info text
                 pageSize: PAGE_SIZE,
                 pageSizes: [5, 10, 25, 50],
                 showPageSizeSelect: true,
                 showInfo: true,
                 showPageLabel: false,
                 showPageNumbers: true,
-                maxPageButtons: 4,
+                maxPageButtons: 7,
                 showFirstLast: true,
                 resetPageOnFilter: true,
                 resetPageOnSort: false
             });
-
+            
         });
     </script>
 

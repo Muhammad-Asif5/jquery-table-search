@@ -46,6 +46,8 @@
  *   pageSizes: [5,10,25,50]  // dropdown choices (the current pageSize is added if missing)
  *   pager: null              // selector / element / jQuery for the pager container; null = auto-build after the table
  *   autoBuildPager: true
+ *   info: null               // selector / element / jQuery that receives the "Showing 1-5 of 57" text (e.g. '#pageInfo').
+ *                            //   null = the text is built inside the pager container
  *   showPageSizeSelect: true, showInfo: true, showPageLabel: true, showFirstLast: false
  *   showPageNumbers: false   // numbered buttons (1 2 3 ... 20) between Prev and Next
  *   maxPageButtons: 7        // max numbered buttons incl. first/last/ellipses (min 5)
@@ -94,6 +96,7 @@
         pageSizes: [5, 10, 25, 50],
         pager: null,
         autoBuildPager: true,
+        info: null,
         showPageSizeSelect: true,
         showInfo: true,
         showPageLabel: true,
@@ -247,10 +250,15 @@
         var self = this, L = this.opts.labels, $p = this.$pager;
         $p.empty();
 
-        this._ui.$info = $('<div class="small text-muted jts-pager-info" aria-live="polite"></div>')
-            .toggle(!!this.opts.showInfo).appendTo($p);
+        if (this.opts.info != null && $(this.opts.info).length) {
+            // info text goes into the user's own element (e.g. <span id="pageInfo">)
+            this._ui.$info = $(this.opts.info).first().addClass('jts-pager-info').attr('aria-live', 'polite').toggle(!!this.opts.showInfo);
+        } else {
+            this._ui.$info = $('<div class="small text-muted jts-pager-info" aria-live="polite"></div>')
+                .toggle(!!this.opts.showInfo).appendTo($p);
+        }
 
-        var $ctrl = $('<div class="d-flex flex-wrap align-items-center gap-2 jts-pager-controls" role="navigation" aria-label="Pagination"></div>').appendTo($p);
+        var $ctrl = $('<div class="d-inline-flex flex-wrap align-items-center gap-2 jts-pager-controls" role="navigation" aria-label="Pagination"></div>').appendTo($p);
 
         if (this.opts.showPageSizeSelect) {
             this._ui.$size = $('<select class="form-select form-select-sm jts-pager-size" style="width:auto" aria-label="Rows per page"></select>')
@@ -292,6 +300,7 @@
 
     proto._syncVisibility = function () {
         if (this.$pager && this.$pager.length) this.$pager.toggle(!!this.enabled);
+        if (this._ui.$info && this.opts.info != null) this._ui.$info.toggle(!!this.enabled && !!this.opts.showInfo);
         if (!this.enabled && this.mode === 'client') this._unhideAll();
     };
 
@@ -676,6 +685,7 @@
         this._unhideAll();
         if (this.built && this.$pager && this.$pager.length) this.$pager.remove();
         else if (this.$pager && this.$pager.length) this.$pager.empty();
+        if (this._ui.$info && this.opts.info != null) this._ui.$info.empty().removeClass('jts-pager-info').removeAttr('aria-live').show();
         this.$pager = null;
         this._ui = {};
         this.built = false;
