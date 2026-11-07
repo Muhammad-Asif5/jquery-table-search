@@ -1,0 +1,186 @@
+/* ----------------------------------------------------------------
+   jQuery tableSearch 2.0 - responsive layer (mobile-first)
+   Load AFTER jquery.tableSearch.css. All selectors use the jts- prefix.
+   Breakpoints: base (<576) | 576+ | 768+ tablet | 1024+ desktop
+   ---------------------------------------------------------------- */
+
+:root {
+    --jts-touch: 44px;            /* minimum touch target */
+    --jts-gutter: 8px;            /* viewport margin for popups */
+    --jts-popup-width: 272px;     /* same width for every column's popup */
+}
+
+/* ---- Table scrolling ------------------------------------------- */
+.jts-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+.jts-scroll > .jts-table {
+    margin-bottom: 0;
+}
+
+.jts-table {
+    min-width: 100%;
+}
+
+.jts-table thead th {
+    white-space: nowrap;          /* keeps columns readable; the wrapper scrolls instead of crushing them */
+}
+
+/* ---- Header controls: touch-sized on small screens --------------- */
+.jts-header-content {
+    gap: 6px;
+    min-height: var(--jts-touch);
+}
+
+.jts-icon-btn {
+    min-width: var(--jts-touch);
+    min-height: var(--jts-touch);
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jts-icon-btn:focus-visible,
+.jts-clear-btn:focus-visible,
+.jts-sort-item:focus-visible {
+    outline: 2px solid var(--jts-ink);
+    outline-offset: 1px;
+}
+
+/* ---- Popup (positioned by JS with position:fixed on tablet/desktop) */
+.jts-popup {
+    width: var(--jts-popup-width);
+    max-width: calc(100vw - (var(--jts-gutter) * 2));
+    max-height: calc(100vh - (var(--jts-gutter) * 2));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+/* Backdrop behind the mobile sheet (created/removed by JS) */
+.jts-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(0, 0, 0, .35);
+}
+
+/* Bottom sheet: used when viewport <= mobileBreakpoint (JS adds .jts-popup-sheet) */
+.jts-popup.jts-popup-sheet {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    max-height: 85dvh;
+    margin: 0;
+    z-index: 1060;
+    border-radius: 12px 12px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, .2);
+}
+
+/* ---- Popup fields: >=44px and 16px font (prevents iOS zoom-on-focus) */
+.jts-popup .form-control,
+.jts-popup .form-select,
+.jts-popup .input-group-text,
+.jts-popup .jts-date-picker-btn {
+    min-height: var(--jts-touch);
+    font-size: 16px;
+}
+
+.jts-popup .jts-input-group-text svg {
+    width: 20px;
+    height: 20px;
+}
+
+.jts-clear-btn {
+    min-width: var(--jts-touch);
+    min-height: var(--jts-touch);
+    justify-content: center;
+    right: 0;
+}
+
+.jts-clear-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.jts-date-group .jts-input { padding-right: 100px; }
+.jts-date-group .jts-clear-btn { right: 52px; }
+.jts-date-picker-btn { min-width: var(--jts-touch); }
+
+.jts-sort-item {
+    min-height: var(--jts-touch);
+    padding: .5rem 1rem;
+    font-size: 1rem;
+    touch-action: manipulation;
+}
+
+.jts-logic .form-check-input {
+    width: 1.35em;
+    height: 1.35em;
+}
+
+.jts-logic .form-check-label {
+    padding: .5rem .25rem;
+    font-size: 1rem;
+}
+
+/* ---- >= 576px ------------------------------------------------------ */
+@media (min-width: 576px) {
+    .jts-popup { min-width: 260px; }
+}
+
+/* ---- >= 768px (tablet) ---------------------------------------------- */
+@media (min-width: 768px) {
+    .jts-popup { min-width: 250px; }
+}
+
+/* ---- >= 1024px / mouse: compact desktop sizing ------------------------ */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+    .jts-header-content { min-height: 0; }
+
+    .jts-icon-btn {
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .jts-popup { min-width: 230px; }
+
+    .jts-popup .form-control,
+    .jts-popup .form-select,
+    .jts-popup .input-group-text,
+    .jts-popup .jts-date-picker-btn {
+        min-height: 0;
+        font-size: .875rem;
+    }
+
+    .jts-popup .jts-input-group-text svg { width: 18px; height: 18px; }
+
+    .jts-clear-btn { min-width: 0; min-height: 0; right: 5px; }
+    .jts-clear-btn svg { width: 14px; height: 14px; }
+
+    .jts-date-group .jts-input { padding-right: 58px; }
+    .jts-date-group .jts-clear-btn { right: 42px; }
+    .jts-date-picker-btn { min-width: 0; }
+
+    .jts-sort-item { min-height: 0; padding: .35rem 1rem; font-size: .875rem; }
+
+    .jts-logic .form-check-input { width: 1em; height: 1em; }
+    .jts-logic .form-check-label { padding: 0; font-size: inherit; }
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .jts-icon-btn { transition: none; }
+}

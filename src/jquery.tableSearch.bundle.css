@@ -1,0 +1,398 @@
+/* ----------------------------------------------------------------
+   jQuery tableSearch 2.0
+   Colour-free (greyscale only) theme.
+   ---------------------------------------------------------------- */
+
+/* Theme tokens — all neutral greys ------------------------------- */
+:root {
+    --jts-ink:           #111;          /* text / strong icons */
+    --jts-ink-muted:     #666;          /* idle icons */
+    --jts-line:          rgba(0,0,0,.15);
+    --jts-line-strong:   rgba(0,0,0,.35);
+    --jts-surface:       #fff;
+    --jts-surface-muted: #f5f5f5;
+    --jts-hover:         rgba(0,0,0,.06);
+    --jts-active:        rgba(0,0,0,.10);
+}
+
+
+/* Minimal custom CSS for the plugin structure */
+/* Ensure the popup can be absolutely positioned */
+.table thead th {
+    position: relative;
+}
+
+ /* Header Content Layout */
+ .jts-header-content {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     gap: 10px;
+     cursor: pointer;
+ }
+
+ .jts-header-icons {
+     display: flex;
+     align-items: center;
+     gap: 0px;
+ }
+
+ /* Clickable Icon Buttons */
+ .jts-icon-btn {
+     color: #6c757d;
+     display: flex;
+     align-items: center;
+     padding: 2px 4px;
+     border-radius: 4px;
+     transition: all 0.2s;
+     cursor: pointer;
+ }
+
+ .jts-icon-btn:hover {
+     color: #212529;
+     background-color: #e9ecef;
+ }
+
+ /* Active Sort State */
+ .jts-icon-btn.sort-active {
+     color: #0d6efd;
+ }
+
+ /* Popup Dialog Positioning */
+ .jts-popup {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1050;
+    margin-top: 4px;
+    min-width: 230px;
+    background: var(--jts-surface);
+    border: 1px solid var(--jts-line);
+    border-radius: 8px;
+    font-weight: normal;
+    white-space: normal;
+    text-align: left;
+    /* Small, tight, neutral shadow */
+    box-shadow: 0 1px 2px rgba(0,0,0,.08),
+                0 2px 6px rgba(0,0,0,.06);
+}
+
+ .jts-popup.active {
+     display: block;
+ }
+
+ /* Custom Input Group Icons */
+ .jts-input-group-text {
+     background-color: transparent;
+     border: none;
+     padding-right: 0;
+     color: #212529;
+ }
+
+ .jts-input-group-text svg {
+     width: 18px;
+     height: 18px;
+     stroke: currentColor;
+     stroke-width: 2;
+     fill: none;
+     stroke-linecap: round;
+     stroke-linejoin: round;
+ }
+
+ /* Clear Button styling inside input */
+ .jts-clear-btn {
+     position: absolute;
+     right: 5px;
+     top: 50%;
+     transform: translateY(-50%);
+     cursor: pointer;
+     color: #adb5bd;
+     z-index: 10;
+     display: none;
+     align-items: center;
+ }
+
+ .jts-clear-btn:hover {
+     color: #dc3545;
+ }
+
+ .jts-clear-btn svg {
+     width: 14px;
+     height: 14px;
+     stroke: currentColor;
+     stroke-width: 2;
+     fill: none;
+     stroke-linecap: round;
+ }
+
+ .jts-input {
+     padding-right: 30px;
+ }
+
+ .jts-date-group .jts-input {
+     padding-right: 58px;
+ }
+
+ .jts-date-group .jts-clear-btn {
+     right: 42px;
+ }
+
+ .jts-date-picker-btn {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     padding: 0 .65rem;
+ }
+
+ .jts-date-picker-btn svg {
+     width: 16px;
+     height: 16px;
+     fill: none;
+     stroke: currentColor;
+     stroke-width: 2;
+     stroke-linecap: round;
+     stroke-linejoin: round;
+ }
+
+ /* Sort Menu Items */
+ .jts-sort-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: .35rem 1rem;
+    color: var(--jts-ink);
+    text-decoration: none;
+    font-size: .875rem;
+}
+
+.jts-sort-item:hover,
+.jts-sort-item:focus {
+    background: var(--jts-surface-muted);
+    color: #000;
+    text-decoration: none;
+    outline: none;
+}
+
+.jts-sort-item svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+
+.jts-sort-check svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: var(--jts-ink);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+ .jts-sort-item .jts-sort-check {
+     align-self: center;
+ }
+
+ input.form-control.jts-input:focus {
+     color: var(--bs-body-color);
+     background-color: var(--bs-body-bg);
+     border-color: #e7f1ff;
+     outline: 0;
+     box-shadow: 0 0 0 .10rem rgb(177 208 255 / 25%);
+ }
+ button.btn.btn-outline-secondary.jts-date-picker-btn {
+    border:var(--bs-btn-border-width) solid #d9d9d9;
+ }
+
+/* ----------------------------------------------------------------
+   jQuery tableSearch 2.0 - responsive layer (mobile-first)
+   Load AFTER jquery.tableSearch.css. All selectors use the jts- prefix.
+   Breakpoints: base (<576) | 576+ | 768+ tablet | 1024+ desktop
+   ---------------------------------------------------------------- */
+
+:root {
+    --jts-touch: 44px;            /* minimum touch target */
+    --jts-gutter: 8px;            /* viewport margin for popups */
+    --jts-popup-width: 272px;     /* same width for every column's popup */
+}
+
+/* ---- Table scrolling ------------------------------------------- */
+.jts-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+.jts-scroll > .jts-table {
+    margin-bottom: 0;
+}
+
+.jts-table {
+    min-width: 100%;
+}
+
+.jts-table thead th {
+    white-space: nowrap;          /* keeps columns readable; the wrapper scrolls instead of crushing them */
+}
+
+/* ---- Header controls: touch-sized on small screens --------------- */
+.jts-header-content {
+    gap: 6px;
+    min-height: var(--jts-touch);
+}
+
+.jts-icon-btn {
+    min-width: var(--jts-touch);
+    min-height: var(--jts-touch);
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jts-icon-btn:focus-visible,
+.jts-clear-btn:focus-visible,
+.jts-sort-item:focus-visible {
+    outline: 2px solid var(--jts-ink);
+    outline-offset: 1px;
+}
+
+/* ---- Popup (positioned by JS with position:fixed on tablet/desktop) */
+.jts-popup {
+    width: var(--jts-popup-width);
+    max-width: calc(100vw - (var(--jts-gutter) * 2));
+    max-height: calc(100vh - (var(--jts-gutter) * 2));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+/* Backdrop behind the mobile sheet (created/removed by JS) */
+.jts-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(0, 0, 0, .35);
+}
+
+/* Bottom sheet: used when viewport <= mobileBreakpoint (JS adds .jts-popup-sheet) */
+.jts-popup.jts-popup-sheet {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    max-height: 85dvh;
+    margin: 0;
+    z-index: 1060;
+    border-radius: 12px 12px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, .2);
+}
+
+/* ---- Popup fields: >=44px and 16px font (prevents iOS zoom-on-focus) */
+.jts-popup .form-control,
+.jts-popup .form-select,
+.jts-popup .input-group-text,
+.jts-popup .jts-date-picker-btn {
+    min-height: var(--jts-touch);
+    font-size: 16px;
+}
+
+.jts-popup .jts-input-group-text svg {
+    width: 20px;
+    height: 20px;
+}
+
+.jts-clear-btn {
+    min-width: var(--jts-touch);
+    min-height: var(--jts-touch);
+    justify-content: center;
+    right: 0;
+}
+
+.jts-clear-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.jts-date-group .jts-input { padding-right: 100px; }
+.jts-date-group .jts-clear-btn { right: 52px; }
+.jts-date-picker-btn { min-width: var(--jts-touch); }
+
+.jts-sort-item {
+    min-height: var(--jts-touch);
+    padding: .5rem 1rem;
+    font-size: 1rem;
+    touch-action: manipulation;
+}
+
+.jts-logic .form-check-input {
+    width: 1.35em;
+    height: 1.35em;
+}
+
+.jts-logic .form-check-label {
+    padding: .5rem .25rem;
+    font-size: 1rem;
+}
+
+/* ---- >= 576px ------------------------------------------------------ */
+@media (min-width: 576px) {
+    .jts-popup { min-width: 260px; }
+}
+
+/* ---- >= 768px (tablet) ---------------------------------------------- */
+@media (min-width: 768px) {
+    .jts-popup { min-width: 250px; }
+}
+
+/* ---- >= 1024px / mouse: compact desktop sizing ------------------------ */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+    .jts-header-content { min-height: 0; }
+
+    .jts-icon-btn {
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .jts-popup { min-width: 230px; }
+
+    .jts-popup .form-control,
+    .jts-popup .form-select,
+    .jts-popup .input-group-text,
+    .jts-popup .jts-date-picker-btn {
+        min-height: 0;
+        font-size: .875rem;
+    }
+
+    .jts-popup .jts-input-group-text svg { width: 18px; height: 18px; }
+
+    .jts-clear-btn { min-width: 0; min-height: 0; right: 5px; }
+    .jts-clear-btn svg { width: 14px; height: 14px; }
+
+    .jts-date-group .jts-input { padding-right: 58px; }
+    .jts-date-group .jts-clear-btn { right: 42px; }
+    .jts-date-picker-btn { min-width: 0; }
+
+    .jts-sort-item { min-height: 0; padding: .35rem 1rem; font-size: .875rem; }
+
+    .jts-logic .form-check-input { width: 1em; height: 1em; }
+    .jts-logic .form-check-label { padding: 0; font-size: inherit; }
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .jts-icon-btn { transition: none; }
+}

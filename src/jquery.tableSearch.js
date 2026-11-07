@@ -107,6 +107,10 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         showLogicOperator: false,      // true = a 2nd condition + AND / OR radios appear in a column popup once the 1st field has a value
         defaultLogic: 'and',           // initially selected radio: 'and' | 'or'
         columnLogic: 'and',            // how the filters of DIFFERENT columns combine: 'and' | 'or'
+        responsive: true,              // viewport-aware popups (fixed, clamped to the screen; bottom sheet on small screens)
+        responsiveWrap: true,          // wrap the table in a horizontally scrollable .jts-scroll div (skipped inside .table-responsive / .jts-scroll)
+        mobileSheet: false,            // true = popups become a bottom sheet on small screens; false = popup stays anchored to the header
+        mobileBreakpoint: 575,         // px; viewport width at or below which the bottom sheet is used (only when mobileSheet is true)
         labels: {
             sort: 'Sort',
             filter: 'Filter',
@@ -249,7 +253,12 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         this.sort = { col: -1, dir: null };
         this.openCol = -1;
         this.timer = null;
+        this.raf = null;
+        this.$backdrop = null;
+        this.wrapped = false;
+        this._onScroll = null;
 
+        this._setupResponsive();
         this._build();
         this._bind();
         this.refresh();
@@ -275,6 +284,62 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     proto._opIconHtml = function (op) {
         return ICONS['op_' + op] || ICONS.equal;
+    };
+
+    // ---------------------------------------------------------------- responsive helpers
+
+    proto._setupResponsive = function () {
+        if (!this.opts.responsive) return;
+        this.$table.addClass('jts-table');
+        if (this.opts.responsiveWrap && !this.$table.parent().is('.jts-scroll, .table-responsive')) {
+            this.$table.wrap('<div class="jts-scroll"></div>');
+            this.wrapped = true;
+        }
+    };
+
+    proto._isMobile = function () {
+        return !!(this.opts.responsive && this.opts.mobileSheet && document.documentElement.clientWidth <= this.opts.mobileBreakpoint);
+    };
+
+    proto._showBackdrop = function () {
+        if (!this.$backdrop) this.$backdrop = $('<div class="jts-backdrop"></div>').appendTo(document.body);
+    };
+
+    proto._hideBackdrop = function () {
+        if (this.$backdrop) { this.$backdrop.remove(); this.$backdrop = null; }
+    };
+
+    // Scrolling anywhere (window, table wrapper, page containers) re-anchors the open popup.
+    // Bound only while a popup is open; removed on close and destroy.
+    proto._bindOpen = function () {
+        var self = this;
+        if (this._onScroll) return;
+        this._onScroll = function (e) {
+            if (self.openCol < 0) return;
+            if ($(e.target).closest('.jts-popup').length) return; // scrolling inside the popup itself
+            self._schedulePosition();
+        };
+        document.addEventListener('scroll', this._onScroll, true);
+    };
+
+    proto._unbindOpen = function () {
+        if (this._onScroll) { document.removeEventListener('scroll', this._onScroll, true); this._onScroll = null; }
+    };
+
+    proto._schedulePosition = function () {
+        var self = this;
+        if (self.raf !== null) return;
+        var run = function () {
+            self.raf = null;
+            if (self.openCol > -1) self._position(self.cols[self.openCol]);
+        };
+        self.raf = window.requestAnimationFrame ? window.requestAnimationFrame(run) : setTimeout(run, 16);
+    };
+
+    proto._cancelPosition = function () {
+        if (this.raf === null) return;
+        if (window.cancelAnimationFrame) window.cancelAnimationFrame(this.raf); else clearTimeout(this.raf);
+        this.raf = null;
     };
 
     proto._build = function () {
@@ -572,8 +637,9 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             if (!$tgt.closest('.jts-popup, .jts-bars-btn', self.table).length) self._closePopups();
         });
 
-        $(window).on('resize' + ns, function () {
-            if (self.openCol > -1) self._position(self.cols[self.openCol]);
+        // resize + orientation change: throttled with rAF, one namespaced handler per instance (removed in destroy)
+        $(window).on('resize' + ns + ' orientationchange' + ns, function () {
+            if (self.openCol > -1) self._schedulePosition();
         });
     };
 
@@ -581,9 +647,35 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     proto._position = function (col) {
         var $p = col.$popup;
+        if (this.opts.responsive) return this._positionResponsive(col);
         $p.css({ left: 'auto', right: '0' });
         var right = $p[0].getBoundingClientRect().right;
         if (right > document.documentElement.clientWidth) $p.css({ left: '0', right: 'auto' });
+    };
+
+    // Fixed positioning escapes the scroll wrapper's clipping; the popup is clamped to the viewport.
+    // Small screens: bottom sheet (layout comes from CSS class jts-popup-sheet).
+    proto._positionResponsive = function (col) {
+        var $p = col.$popup, p = $p[0], m = 8;
+        var mobile = this._isMobile();
+        $p.toggleClass('jts-popup-sheet', mobile);
+        if (mobile) {
+            $p.css({ position: '', top: '', left: '', right: '', width: '', maxHeight: '' });
+            this._showBackdrop();
+            return;
+        }
+        this._hideBackdrop();
+        var vw = document.documentElement.clientWidth, vh = window.innerHeight || document.documentElement.clientHeight;
+        var r = col.$th[0].getBoundingClientRect();
+        $p.css({ position: 'fixed', left: 0, top: 0, right: 'auto', maxHeight: (vh - 2 * m) + 'px' });
+        var w = Math.min(p.offsetWidth, vw - 2 * m), h = p.offsetHeight;
+        var left = Math.max(m, Math.min(r.right - w, vw - w - m));      // right-aligned to the header, kept on screen
+        var top = r.bottom;                                                   // the popup's own 4px margin-top adds the gap
+        if (top + h > vh - m) {                                          // no room below: flip above, else pin inside the viewport
+            var above = r.top - h - 4;
+            top = above >= m ? above : Math.max(m, vh - h - m);
+        }
+        $p.css({ left: left + 'px', top: top + 'px' });
     };
 
     proto._togglePopup = function (col) {
@@ -594,7 +686,10 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         col.$filterBtn.attr('aria-expanded', 'true');
         this.openCol = col.index;
         this._position(col);
-        col.$input.trigger('focus');
+        this._bindOpen();
+        // touch devices: skip auto-focus so the on-screen keyboard doesn't pop up and cover the table
+        var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        if (!touch && !this._isMobile()) col.$input.trigger('focus');
     };
 
     proto._closePopups = function () {
@@ -603,6 +698,9 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
             c.$filterBtn.attr('aria-expanded', 'false');
         });
         this.openCol = -1;
+        this._unbindOpen();
+        this._cancelPosition();
+        this._hideBackdrop();
     };
 
     proto._openPicker = function (col) {
@@ -916,6 +1014,9 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
 
     proto.destroy = function () {
         clearTimeout(this.timer);
+        this._unbindOpen();
+        this._cancelPosition();
+        this._hideBackdrop();
         this.$table.off(this.ns);
         $(document).off(this.ns);
         $(window).off(this.ns);
@@ -936,6 +1037,11 @@ showSortIcon: true,            // show the sort icon in headers (and sort items 
         this.sort = { col: -1, dir: null };
         for (var i = 0; i < this.rows.length; i++) { this.rows[i].el.style.display = ''; this.rows[i].vis = true; }
         this._applySort();
+
+        // undo responsive additions (wrapper + class)
+        if (this.wrapped && this.$table.parent().is('.jts-scroll')) this.$table.unwrap();
+        this.wrapped = false;
+        this.$table.removeClass('jts-table');
 
         this.$table.removeData(DATA_KEY);
     };
