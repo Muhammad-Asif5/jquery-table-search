@@ -4,17 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>jquery-table-search demo (server mode)</title>
+    <title>jquery-table-search + tablePager (client / server mode)</title>
+
+    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- bundle = base CSS + responsive CSS + loading styles (single file) -->
+
+    <!-- Plugin CSS -->
     <link href="src/jquery.tableSearch.bundle.css" rel="stylesheet">
+    <link href="src/jquery.tableSearch.responsive.css" rel="stylesheet">
+    <link href="src/jquery.tablePager.bundle.css" rel="stylesheet">
 </head>
 
 <body class="p-4">
 
-    <h4 class="mb-3">Click a header to sort, or the bars icon to filter</h4>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <h4 class="mb-0">Click a header to sort, or the bars icon to filter</h4>
+    </div>
 
-    <!-- data-field = property name in each row returned by the server -->
+    <!--
+        data-field = the property of each JSON row shown in that column (server mode; ignored in client mode).
+        In client mode the <tbody> is filled below from the demo data, standing in for your server-rendered rows.
+    -->
     <table class="table table-bordered table-hover" id="myTable">
         <thead class="table-light">
             <tr>
@@ -22,184 +32,104 @@
                 <th data-type="string" data-field="position">Position</th>
                 <th data-type="string" data-field="office">Office</th>
                 <th data-type="numeric" data-field="extn">Extn.</th>
-                <th data-type="date" data-field="startDate">Start date</th>
+                <th data-type="date" data-field="start_date">Start date</th>
                 <th data-currency data-field="salary">Salary</th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
 
-    <!-- simple pager driven by the plugin's page() / pageSize() methods and the tablesearch:load event -->
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2" id="pager">
-        <div class="small text-muted" id="pagerInfo">&nbsp;</div>
-        <div class="d-flex align-items-center gap-2">
-            <select class="form-select form-select-sm" id="pageSizeSel" style="width:auto" aria-label="Rows per page">
-                <option>10</option>
-                <option>25</option>
-                <option>50</option>
-            </select>
-            <button class="btn btn-sm btn-outline-secondary" id="prevBtn" type="button">Prev</button>
-            <span class="small" id="pageLabel"></span>
-            <button class="btn btn-sm btn-outline-secondary" id="nextBtn" type="button">Next</button>
-        </div>
-    </div>
-
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- Bootstrap JS (optional, used by the auto-built pager markup) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Demo only: sample data + an in-browser mock of the server endpoint. Remove in production. -->
+    <script src="demo-server.js"></script>
+
+    <!-- Plugins -->
     <script src="src/jquery.tableSearch.js"></script>
+    <script src="src/jquery.tablePager.js"></script>
 
     <script>
-        /* ------------------------------------------------------------------
-           MOCK SERVER for /api/people (demo only - delete this block when the
-           real endpoint exists). It implements the contract the plugin expects:
-             request : { page, pageSize, sort, columnLogic, filters }
-             response: { data: [ {...row} ], total: <matching rows> }
-           ------------------------------------------------------------------ */
-        (function () {
-            var base = [
-                ['Airi Satou', 'Accountant', 'Tokyo', 5407, '2008/11/28', 162700],
-                ['Zorita Serrano', 'Software Engineer', 'San Francisco', 1223, '2008/06/01', 150000],
-                ['Angelica Ramos', 'Chief Executive Officer (CEO)', 'London', 5797, '2009/10/09', 1200000],
-                ['Ashton Cox', 'Junior Technical Author', 'San Francisco', 1562, '2009/01/12', 86000],
-                ['Bradley Greer', 'Software Engineer', 'London', 2558, '2012/10/13', 132000],
-                ['Cedric Kelly', 'Senior Javascript Developer', 'Edinburgh', 6224, '2012/03/29', 433060]
-            ];
-            var offices = ['Tokyo', 'London', 'Edinburgh', 'San Francisco', 'New York'];
-            var DB = [];
-            for (var i = 0; i < 63; i++) {                       // 63 rows so paging is visible
-                var b = base[i % base.length];
-                var n = Math.floor(i / base.length);
-                DB.push({
-                    name: n ? b[0] + ' ' + (n + 1) : b[0],
-                    position: b[1],
-                    office: n ? offices[(i + n) % offices.length] : b[2],
-                    extn: b[3] + n * 7,
-                    startDate: b[4].replace(/^(\d{4})/, function (y) { return +y + (n % 5); }),
-                    salary: b[5] + n * 1250
-                });
-            }
+        $(function () {
 
-            function norm(v, type) {                             // value in the row -> comparable value
-                if (type === 'date') return String(v).replace(/\//g, '-');      // 2008/11/28 -> 2008-11-28 (ISO, like the request)
-                if (type === 'numeric') return Number(v);
-                return String(v == null ? '' : v).toLowerCase();
-            }
-            var OPS = {
-                contains: function (a, b) { return a.indexOf(b) > -1; },
-                not_contains: function (a, b) { return a.indexOf(b) === -1; },
-                eq: function (a, b) { return a === b; },
-                neq: function (a, b) { return a !== b; },
-                starts: function (a, b) { return a.indexOf(b) === 0; },
-                ends: function (a, b) { return a.length >= b.length && a.slice(-b.length) === b; },
-                gt: function (a, b) { return a > b; },
-                gte: function (a, b) { return a >= b; },
-                lt: function (a, b) { return a < b; },
-                lte: function (a, b) { return a <= b; },
-                empty: function (a) { return a === '' || a == null; },
-                not_empty: function (a) { return !(a === '' || a == null); }
+            // ----------------------------------------------------------------
+            // THE ONE SETTING: where do filtering, sorting and paging happen?
+            //   'client' -> all rows are in the page, the browser does everything
+            //   'server' -> the server returns one filtered/sorted page per request
+            // Demo: ?mode=server in the URL. In your app just hard-code it.
+            // ----------------------------------------------------------------
+            var MODE = 'server' //'server' : 'client';
+            var PAGE_SIZE = 5;
+
+            // if (MODE === 'client') {
+            //     debugger
+            //     var html = MockServer.rows.map(function (r) {
+            //         return '<tr><td>' + r.name + '</td><td>' + r.position + '</td><td>' + r.office + '</td><td>' +
+            //             r.extn + '</td><td>' + r.start_date + '</td><td>' + r.salary + '</td></tr>';
+            //     }).join('');
+            //     $('#myTable tbody').html(html);
+            // }
+
+            // ----------------------------------------------------------------
+            // 1) Filter + sort
+            // ----------------------------------------------------------------
+            var searchOptions = {
+                processing: MODE,                       // 'client' | 'server'
+                showSortIcon: true,
+                showFilterIcon: true,
+                debounceTime: 300,
+                dateFormat: 'YYYY/MM/DD',
+                numericRegex: /[^0-9.-]+/g,
+                currencySymbol: 'Rs',
+                currencyPosition: 'prefix',
+                currencyFormatCells: true,
+                defaultSortColumn: 'Name',
+                defaultSortDirection: 'asc',
+                showLogicOperator: false,
+                defaultLogic: 'and',
+                columnLogic: 'and',
+                responsive: true,
+                responsiveWrap: true,
+                mobileSheet: true,
+                mobileBreakpoint: 575
             };
 
-            function query(req) {
-                var rows = DB.filter(function (row) {
-                    var results = req.filters.map(function (f) {          // one result per filtered column
-                        var rs = f.conditions.map(function (c) {
-                            var cell = row[f.field];
-                            if (c.operator === 'empty' || c.operator === 'not_empty') return OPS[c.operator](cell);
-                            return OPS[c.operator](norm(cell, f.type), norm(c.value, f.type));
-                        });
-                        return f.logic === 'or' ? rs.some(Boolean) : rs.every(Boolean);   // AND / OR inside a column
-                    });
-                    if (!results.length) return true;
-                    return req.columnLogic === 'or' ? results.some(Boolean) : results.every(Boolean);   // across columns
+            if (MODE === 'server') {
+                $.extend(searchOptions, {
+                    pageSize: PAGE_SIZE,
+                    ajax: { url: 'mock://employees', method: 'POST' },   // <- your endpoint, e.g. '/api/employees'
+                    responseMap: { rows: 'data', total: 'total' }        // where rows + total are in the JSON
                 });
-                if (req.sort) {
-                    var k = req.sort.field, m = req.sort.direction === 'desc' ? -1 : 1;
-                    var type = $('#myTable thead th').eq(req.sort.column).data('type') || 'string';
-                    rows.sort(function (a, b) {
-                        var x = type === 'string' ? String(a[k]).toLowerCase() : norm(a[k], type);
-                        var y = type === 'string' ? String(b[k]).toLowerCase() : norm(b[k], type);
-                        return (x > y ? 1 : x < y ? -1 : 0) * m;
-                    });
-                }
-                var start = (req.page - 1) * req.pageSize;
-                return { data: rows.slice(start, start + req.pageSize), total: rows.length };
             }
 
-            // Intercepts $.ajax calls to /api/people (works with the plugin's normal ajax settings)
-            $.ajaxTransport('+*', function (opts) {
-                if (!/\/api\/people/.test(opts.url)) return;
-                var timer;
-                return {
-                    send: function (headers, complete) {
-                        timer = setTimeout(function () {                // simulated network latency
-                            try {
-                                var res = query(JSON.parse(opts.data));
-                                complete(200, 'OK', { text: JSON.stringify(res) });
-                            } catch (e) { complete(500, 'Server error', { text: String(e) }); }
-                        }, 400);
-                    },
-                    abort: function () { clearTimeout(timer); }
-                };
+            $('#myTable').tableSearch(searchOptions);
+
+            // ----------------------------------------------------------------
+            // 2) Pagination: same options in both modes.
+            //    processing 'server' + tableSearch in server mode => the pager drives tableSearch,
+            //    so page + pageSize + sort + filters go to the server in a single request.
+            // ----------------------------------------------------------------
+            $('#myTable').tablePager({
+                enabled: true,
+                processing: MODE,                       // 'client' | 'server' | 'auto'
+                pageSize: PAGE_SIZE,
+                pageSizes: [5, 10, 25, 50],
+                showPageSizeSelect: true,
+                showInfo: true,
+                showPageLabel: false,
+                showPageNumbers: true,
+                maxPageButtons: 4,
+                showFirstLast: true,
+                resetPageOnFilter: true,
+                resetPageOnSort: false
             });
-        })();
+
+        });
     </script>
 
-    <script>
-        var $t = $('#myTable');
-
-        $t.tableSearch({
-            showSortIcon: true,
-            showFilterIcon: true,
-            debounceTime: 300,
-            dateFormat: 'YYYY/MM/DD',
-            numericRegex: /[^0-9.-]+/g,
-            currencySymbol: 'Rs',        // '$', 'Rs', 'PKR', '€' ...
-            currencyPosition: 'prefix',  // or 'suffix'
-            currencyFormatCells: true,
-            defaultSortColumn: 'Name',
-            defaultSortDirection: 'asc',
-            showLogicOperator: false,     // 2nd condition joined by AND / OR in every column popup
-            defaultLogic: 'and',         // initial AND / OR choice: 'and' | 'or'
-            columnLogic: 'and',          // how filters of different columns combine: 'and' | 'or'
-            responsive: true,            // viewport-aware popups (fixed, clamped to the screen)
-            responsiveWrap: true,        // wrap the table in a horizontally scrollable .jts-scroll div
-            mobileSheet: true,           // true = popups become a bottom sheet on small screens; false = anchored to the header
-            mobileBreakpoint: 575,
-
-            // ---- server mode ----
-            processing: 'server',
-            pageSize: 5,
-            ajax: { url: '/api/people', method: 'POST' },
-            responseMap: { rows: 'data', total: 'total' },
-
-        });
-
-        // ---- pager (uses the plugin's page()/pageSize() and the tablesearch:load event) ----
-        // page-size dropdown follows the plugin's pageSize option (adds the value if it isn't listed)
-        (function () {
-            var ps = String($t.tableSearch('pageSize')), $sel = $('#pageSizeSel');
-            if (!$sel.find('option').filter(function () { return this.value === ps; }).length) {
-                $sel.append($('<option>').text(ps));
-                $sel.append($sel.find('option').sort(function (a, b) { return a.value - b.value; }));
-            }
-            $sel.val(ps);
-        })();
-        var pages = 1;
-        $t.on('tablesearch:load', function (e, info) {
-            pages = info.pages;
-            var from = info.total ? (info.page - 1) * info.pageSize + 1 : 0;
-            $('#pagerInfo').text('Showing ' + from + '-' + (from ? from + info.rows - 1 : 0) + ' of ' + info.total);
-            $('#pageLabel').text('Page ' + info.page + ' / ' + info.pages);
-            $('#prevBtn').prop('disabled', info.page <= 1);
-            $('#nextBtn').prop('disabled', info.page >= info.pages);
-        });
-        $t.on('tablesearch:error', function () {
-            $('#pagerInfo').text('Could not load data');
-        });
-        $('#prevBtn').on('click', function () { $t.tableSearch('page', $t.tableSearch('page') - 1); });
-        $('#nextBtn').on('click', function () { $t.tableSearch('page', $t.tableSearch('page') + 1); });
-        $('#pageSizeSel').on('change', function () { $t.tableSearch('pageSize', this.value); });
-    </script>
 </body>
 
 </html>

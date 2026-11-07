@@ -348,6 +348,12 @@
     font-size: 1rem;
 }
 
+/* rows hidden by paging */
+.jts-page-hidden { display: none !important; }
+
+/* optional: nicer pager spacing */
+.jts-pager .form-select-sm { min-width: 4.5rem; }
+
 /* ---- >= 576px ------------------------------------------------------ */
 @media (min-width: 576px) {
     .jts-popup { min-width: 260px; }
